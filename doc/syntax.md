@@ -16,11 +16,15 @@
 
 Literals can be specified as hexadecimal with `0x`, binary with `0b`, or decimal with no prefix.
 
-A memory address is designated by a preceding `*`, immediate values have no prefix.
+A memory address is designated by a preceding `*`, otherwise values have no prefix.
 
 ## Labels
 
 Labels are created with a preceding `:` and are referenced with a `$` prefix.
+
+## Comments
+
+Comments are indicated with a preceding `//` and require a space seperation from any code preceding it on the same line (so `NOOP//does nothing` is not allowed).
 
 ## Instructions
 
@@ -32,17 +36,21 @@ MOVE dest src
 // Moves data between two registers or puts a value into a register. `src` 
 // can be either a register or an immediate value, `dest` is a register.
 
-LOAD-<addressingMode> dest src
+LOAD-<wordGeometry>-<addressingMode> dest src
 // Loads a value from memory into a register. `src` specifies the
 // location in memory to load from. It can be an immediate value, a register,
 // or a label. `dest` is the destination register. `addressingMode` selects
-// how the memory address is interpreted (see section below).
+// how the memory address is interpreted (see section below). `wordGeometry`
+// describes how many bytes to load and how to put them in `dest` (see
+// Word Geometry section).
 
-STOR-<addressingMode> dest src
+STOR-<wordGeometry>-<addressingMode> dest src
 // Stores a value from a register into memory. `src` is the register to store
 // in memory. `dest` specifies the location in memory to store to. It can be
 // an immediate value, a register, or a label. `addressingMode` selects how
-// the memory address is interpreted (see section below).
+// the memory address is interpreted (see section below). `wordGeometry`
+// describes how many bytes to store and how to extract them from `dest` (see
+// Word Geometry section).
 
 ADD dest src1 src2
 // Adds two values together and stores it in a register. `src1` is a register.
@@ -148,7 +156,7 @@ TERM
 
 ### Addressing Modes
 
-None: The memory address will be interpreted as relative to the command.
+None: The memory address will be interpreted as relative to the command. Jumps to labels can only be relative.
 
 `OA`, `OB`, and `OC` will make the command add the respective offset register to the related memory address
 
@@ -173,3 +181,79 @@ None: The memory address will be interpreted as relative to the command.
 | PZ   | positive or zero    | N==0           |
 | OV   | signed overflow     | V==1           |
 | NV   | no signed overflow  | V==0           |
+
+### Word Geometry
+
+By default, a LOAD or STORE command will interact with 4 bytes (or 2 bytes for the SS register). You can select different word sizes and offsets within the register using
+the following flags:
+
+```
+W2S0 - Selects a 2 byte word with a 0 byte shift:
+
+  0xABCDEFGH
+        \__/
+          Selected
+
+W2S1 - Selects a 2 byte word with a 1 byte shift:
+
+  0xABCDEFGH
+      \__/
+        Selected
+
+W2S2 - Selects a 2 byte word with a 2 byte shift:
+
+  0xABCDEFGH
+    \__/
+      Selected
+
+W1S0 - Selects a 1 byte word with a 0 byte shift:
+
+  0xABCDEFGH
+          \/
+           Selected
+
+W1S1 - Selects a 1 byte word with a 1 byte shift:
+
+  0xABCDEFGH
+        \/
+         Selected
+
+W1S2 - Selects a 1 byte word with a 2 byte shift:
+
+  0xABCDEFGH
+      \/
+       Selected
+
+W1S3 - Selects a 1 byte word with a 3 byte shift:
+
+  0xABCDEFGH
+    \/
+     Selected
+```
+
+Note that only `W1S0` and `W1S1` are applicable to the `SS` register.
+
+## Example Code
+Checks to see if a byte in memory is 7 or lower. If it is, terminate. If it's not, shift it to the left by how much higher it was than 7, store it in memory, jump to some specific location in absolute memory space, and return.
+
+```
+// Load a single byte into G0 using the OC register as offset
+LOAD-W1S0-OC  G0 *0x1000
+
+// Check if its 7 or lower
+COMP          G0 7
+BRHE          $finish
+
+// Not 7
+AND           G0 G0 0x000000FF
+SUB           G1 G0 7
+BSLC          G0 G0 G1
+STOR-OC       *0x1004 G0
+
+// Some important system call
+BRAL-ABS      $0x90FE
+
+:finish
+TERM
+
+```
