@@ -16,8 +16,6 @@
 
 Literals can be specified as hexadecimal with `0x`, binary with `0b`, or decimal with no prefix.
 
-A memory address is designated by a preceding `*`, otherwise values have no prefix.
-
 ## Labels
 
 Labels are created with a preceding `:` and are referenced with a `$` prefix.

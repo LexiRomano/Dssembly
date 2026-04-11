@@ -39,6 +39,16 @@ void freeInstructionListContents(instructionList_t *instructionList)
     current = instructionList->first;
     while (NULL != current)
     {
+        if (NULL != current->label)
+        {
+            free(current->label);
+        }
+
+        if (NULL != current->targetLabel)
+        {
+            free(current->targetLabel);
+        }
+
         next = current->next;
         free(current);
         current = next;

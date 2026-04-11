@@ -7,8 +7,8 @@ static instructionList_t instructionList = {0};
 
 static instructionDescriptor_t instructionDescriptors[] =
 {
-    {"MOVE", 0x06, form_2, true,  0x07, form_4, false, 0, false},
-    {"TERM", 0xFF, form_6, false, 0,    0,      false, 0, false}
+    {"MOVE", 0x06, form_2, true,  0x07, form_4, false, 0, true,  false},
+    {"TERM", 0xFF, form_6, false, 0,    0,      false, 0, false, false}
 };
 
 static char regselDescriptors[][3] = 
@@ -50,11 +50,29 @@ static uint8_t formRegselCount[] =
     0  // form_7
 };
 
+static uint32_t formMaxArgSize[] =
+{
+    0,         // form_1
+    0,         // form_2
+    0xFFFF,    // form_3
+    0,         // form_4
+    0xFFFFFF,  // form_5
+    0,         // form_6
+    0xFFFFFFF, // form_7
+};
+
 static bool parseArgs(int argc, char* argv[])
 {
-    if (argc < 2)
-    {
-        printf("Insufficient arguments!\n");
+    if (argc != 3)
+    {   
+        if (argc > 3)
+        {
+            printf("Too many arguments!\n");
+        }
+        else
+        {
+            printf("Insufficient arguments!\n");
+        }
         return false;
     }
 
@@ -66,10 +84,8 @@ static bool parseArgs(int argc, char* argv[])
         return false;
     }
 
-    if (argc >= 3)
-    {
-        outputFileLocation = argv[2];
-    }
+    outputFileLocation = argv[2];
+    
 
     return true;
 }
@@ -89,6 +105,12 @@ static uint8_t getRegsel(char *str)
 
 static bool isValidRegsel(char *str)
 {
+    if (NULL        == str ||
+        strlen(str) != 2)
+    {
+        return false;
+    }
+
     for (uint8_t i = 0; i < 0x10; i++)
     {
         if (0 == strncmp(str, regselDescriptors[i], 3))
@@ -100,7 +122,10 @@ static bool isValidRegsel(char *str)
     return false;
 }
 
-static bool parseFormAndRegsel(tokens_t *tokens, instruction_t *instruction, instructionDescriptor_t *descriptor, uint32_t lineNumber)
+static bool parseFormAndRegsel(tokens_t                *tokens,
+                               instruction_t           *instruction,
+                               instructionDescriptor_t *descriptor,
+                               uint32_t                 lineNumber)
 {
     uint8_t minimumRegselCount = 0;
     bool    isAlternateForm    = false;
@@ -201,38 +226,357 @@ static bool parseFormAndRegsel(tokens_t *tokens, instruction_t *instruction, ins
 
     if (isAlternateForm)
     {
-        instruction->opCode = descriptor->opCodePrimaryVal;
+        instruction->opCode = descriptor->opCodeAlternateVal;
     }
     else
     {
-        instruction->opCode = descriptor->opCodeAlternateVal;
+        instruction->opCode = descriptor->opCodePrimaryVal;
+    }
+
+    if (descriptor->hasInstructionAugment)
+    {
+        instruction->hasInstructionAugment = true;
+        instruction->instructionAugment    = descriptor->instructionAugment;
     }
 
     return true;
 }
 
-static bool parseInstruction(tokens_t *tokens, instruction_t *instruction, uint32_t lineNumber)
+static bool parseBinary(char *str, uint32_t *out)
+{
+    uint64_t sum = 0;
+    char    *pointer = str;
+
+    while (*pointer != '\0')
+    {
+        sum *= 0b10;
+
+        switch (*pointer)
+        {
+            case '1':
+                sum++;
+            case '0':
+                break;
+            default:
+                return false;
+        }
+
+        pointer++;
+    }
+
+    if (sum > 0xFFFFFFFF)
+    {
+        return false;
+    }
+
+    *out = (uint32_t) sum;
+
+    return true;
+}
+
+static bool parseDecimal(char *str, uint32_t *out)
+{
+    uint64_t sum = 0;
+    char    *pointer = str;
+
+    while (*pointer != '\0')
+    {
+        sum *= 10;
+
+        switch (*pointer)
+        {
+            case '9':
+                sum++;
+            case '8':
+                sum++;
+            case '7':
+                sum++;
+            case '6':
+                sum++;
+            case '5':
+                sum++;
+            case '4':
+                sum++;
+            case '3':
+                sum++;
+            case '2':
+                sum++;
+            case '1':
+                sum++;
+            case '0':
+                break;
+            default:
+                return false;
+        }
+
+        pointer++;
+    }
+
+    if (sum > 0xFFFFFFFF)
+    {
+        return false;
+    }
+
+    *out = (uint32_t) sum;
+
+    return true;
+}
+
+static bool parseHexadecimal(char *str, uint32_t *out)
+{
+    uint64_t sum = 0;
+    char    *pointer = str;
+
+    while (*pointer != '\0')
+    {
+        sum *= 0x10;
+
+        switch (*pointer)
+        {
+            case 'F':
+            case 'f':
+                sum++;
+            case 'E':
+            case 'e':
+                sum++;
+            case 'D':
+            case 'd':
+                sum++;
+            case 'C':
+            case 'c':
+                sum++;
+            case 'B':
+            case 'b':
+                sum++;
+            case 'A':
+            case 'a':
+                sum++;
+            case '9':
+                sum++;
+            case '8':
+                sum++;
+            case '7':
+                sum++;
+            case '6':
+                sum++;
+            case '5':
+                sum++;
+            case '4':
+                sum++;
+            case '3':
+                sum++;
+            case '2':
+                sum++;
+            case '1':
+                sum++;
+            case '0':
+                break;
+            default:
+                return false;
+        }
+
+        pointer++;
+    }
+
+    if (sum > 0xFFFFFFFF)
+    {
+        return false;
+    }
+
+    *out = (uint32_t) sum;
+
+    return true;
+}
+
+static bool parseLiteral(char *literal, instruction_t *instruction)
+{
+    if (NULL == literal ||
+        NULL == instruction)
+    {
+        return false;
+    }
+
+    if (strlen(literal) >= 3)
+    {
+        // Has a prefix
+        if (0 == strncmp(literal, "0b", 2))
+        {
+            // Binary
+            return parseBinary(&(literal[2]), &(instruction->immediate));
+
+        }
+        else if (0 == strncmp(literal, "0x", 2))
+        {
+            // Hexadecimal
+            return parseHexadecimal(&(literal[2]), &(instruction->immediate));
+        }
+    }
+
+    return  parseDecimal(literal, &(instruction->immediate));;
+}
+
+static bool validateLabel(char *str)
+{
+    if (NULL == str)
+    {
+        printf("Internal error\n");
+        return false;
+    }
+
+    if (true == isValidRegsel(str))
+    {
+        return false;
+    }
+
+    switch (str[0])
+    {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        case ':':
+            return false;
+    }
+
+    return true;
+}
+
+static bool parseInstructionArguments(tokens_t                *tokens,
+                                      instruction_t           *instruction,
+                                      instructionDescriptor_t *descriptor,
+                                      uint32_t                 lineNumber)
+{
+    form_e form            = 0;
+    bool   isAlternateForm = false;
+    char  *argument        = NULL;
+
+    if (NULL == tokens      ||
+        NULL == instruction ||
+        NULL == descriptor)
+    {
+        printf("Internal error\n");
+        return false;
+    }
+
+    if (instruction->opCode == descriptor->opCodePrimaryVal)
+    {
+        form = descriptor->primaryForm;
+    }
+    else
+    {
+        isAlternateForm = true;
+        form = descriptor->alternateForm;
+    }
+
+    if (formArgCount[form] == formRegselCount[form] &&
+        ((true  == isAlternateForm &&
+          false == descriptor->alternateFormUsesArgAugment) ||
+        false == isAlternateForm))
+    {
+        // All regsel or no argument
+        return true;
+    }
+
+    argument = tokens->tokens[tokens->tokenCount - 1];
+
+    if (false == parseLiteral(argument, instruction))
+    {
+        if (false == descriptor->takesAddress)
+        {
+            printf("Error on line %u: Malformed literal \"%s\"\n", lineNumber, argument);
+            return false;
+        }
+
+        if (false == validateLabel(argument))
+        {
+            // No way this could be a label
+            printf("Error on line %u: Invalid argument \"%s\"\n", lineNumber, argument);
+            return false;
+        }
+
+        // Treat as a label for now.
+        instruction->targetLabel = calloc(strlen(argument) + 1, sizeof(char));
+        snprintf(instruction->targetLabel, strlen(argument) + 1, "%s", argument);
+    }
+    else if (instruction->immediate > formMaxArgSize[form] &&
+             false == descriptor->alternateFormUsesArgAugment)
+    {
+        printf("Error on line %u: Literal too large for instruction \"%s\"\n", lineNumber, argument);
+        return false;
+    }
+
+    return true;
+}
+
+static bool parseInstruction(tokens_t *tokens, instruction_t *instruction, char **label, uint32_t lineNumber)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
 
     if (NULL == tokens             ||
         0    == tokens->tokenCount ||
-        NULL == instruction)
+        NULL == instruction        ||
+        NULL == label)
     {
         printf("Internal error\n");
         return false;
+    }
+
+    if (tokens->tokens[0][0] == ':')
+    {
+        if (tokens->tokenCount > 1)
+        {
+            printf("Error on line %u: Broken label\n", lineNumber);
+            return false;
+        }
+
+        // Labels
+        if (strlen(tokens->tokens[0]) == 1 ||
+            false == validateLabel(&(tokens->tokens[0][1])))
+        {
+            printf("Error on line %u: Invalid label \"%s\"\n", lineNumber, &(tokens->tokens[0][1]));
+            return false;
+        }
+
+        if (NULL != *label)
+        {
+            printf("Error on line %u: Cannot have more than one label in a row\n", lineNumber);
+            return false;
+        }
+
+        *label = calloc(strlen(&(tokens->tokens[0][1])) + 1, sizeof(char));
+        snprintf(*label, strlen(&(tokens->tokens[0][1])) + 1, "%s", &(tokens->tokens[0][1]));
+
+        return true;
     }
 
     for (uint16_t i = 0; i < sizeof(instructionDescriptors) / sizeof(instructionDescriptor_t); i++)
     {
         descriptorInstance = &(instructionDescriptors[i]);
 
-        if (0 == strcmp(tokens->tokens[0], descriptorInstance->opCodeStr))
+        if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr))
         {
             if (false == parseFormAndRegsel(tokens, instruction, descriptorInstance, lineNumber))
             {
                 return false;
             }
+
+            if (false == parseInstructionArguments(tokens, instruction, descriptorInstance, lineNumber))
+            {
+                return false;
+            }
+
+            if (NULL != *label)
+            {
+                instruction->label = *label;
+                *label = NULL;
+            }
+            
             return true;
         }
     }
@@ -248,6 +592,7 @@ static bool parseInputFile()
     instruction_t *currentInstruction = NULL;
     tokens_t       tokens             = {0};
     uint32_t       lineNumber         = 0;
+    char          *label              = NULL;
 
     while (fgets(inputBuffer, sizeof(inputBuffer), inputFile))
     {
@@ -272,19 +617,30 @@ static bool parseInputFile()
             printf("Internal error\n");
             freeTokensContents(&tokens);
             freeInstructionListContents(&instructionList);
+            fclose(inputFile);
             return false;
         }
 
-        if (false == parseInstruction(&tokens, currentInstruction, lineNumber))
+        if (false == parseInstruction(&tokens, currentInstruction, &label, lineNumber))
         {
             freeTokensContents(&tokens);
             freeInstructionListContents(&instructionList);
+            fclose(inputFile);
             return false;
         }
-
     }
 
     freeTokensContents(&tokens);
+    fclose(inputFile);
+
+    if (NULL != label)
+    {
+        printf("Error on line %u: Dangling label at end of file\n", lineNumber);
+        free(label);
+        freeInstructionListContents(&instructionList);
+        return false;
+    }
+
     return true;
 }
 

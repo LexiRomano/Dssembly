@@ -21,14 +21,17 @@ typedef enum
 
 typedef struct instruction_t
 {
-    uint8_t        opCode;
-    uint8_t        instructionAugment;
-    char          *label;
-    uint8_t        regsel1;
-    uint8_t        regsel2;
-    uint8_t        regsel3;
-    uint32_t       immediate;
-    struct instruction_t *argument;
+    uint8_t               opCode;
+    bool                  hasInstructionAugment;
+    uint8_t               instructionAugment;
+    char                 *label;
+    uint8_t               regsel1;
+    uint8_t               regsel2;
+    uint8_t               regsel3;
+    bool                  argAugment;
+    uint32_t              immediate;
+    char                 *targetLabel;
+    struct instruction_t *targetLabel_p;
     struct instruction_t *next;
 } instruction_t;
 
@@ -40,7 +43,7 @@ typedef struct
 
 typedef struct
 {
-    char    opCodeStr[OP_CODE_MAX_LEN];
+    char    instructionStr[OP_CODE_MAX_LEN];
     uint8_t opCodePrimaryVal;
     form_e  primaryForm;
 
@@ -52,6 +55,7 @@ typedef struct
     uint8_t instructionAugment;
 
     bool    alternateFormUsesArgAugment;
+    bool    takesAddress;
 } instructionDescriptor_t;
 
 typedef struct
