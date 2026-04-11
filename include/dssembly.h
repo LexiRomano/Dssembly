@@ -6,16 +6,17 @@
 
 #define MAX_TOKENS 8
 #define COMMENT_PREFIX "//"
+#define OP_CODE_MAX_LEN 32
 
 typedef enum
 {
-    form_1,
-    form_2,
-    form_3,
-    form_4,
-    form_5,
-    form_6,
-    form_7
+    form_1 = 0,
+    form_2 = 1,
+    form_3 = 2,
+    form_4 = 3,
+    form_5 = 4,
+    form_6 = 5,
+    form_7 = 6
 } form_e;
 
 typedef struct instruction_t
@@ -39,7 +40,24 @@ typedef struct
 
 typedef struct
 {
-    char *tokens[MAX_TOKENS];
+    char    opCodeStr[OP_CODE_MAX_LEN];
+    uint8_t opCodePrimaryVal;
+    form_e  primaryForm;
+
+    bool    hasAlternateForm;
+    uint8_t opCodeAlternateVal;
+    form_e  alternateForm;
+
+    bool    hasInstructionAugment;
+    uint8_t instructionAugment;
+
+    bool    alternateFormUsesArgAugment;
+} instructionDescriptor_t;
+
+typedef struct
+{
+    char   *tokens[MAX_TOKENS];
+    uint8_t tokenCount;
 } tokens_t;
 
 // Util functions

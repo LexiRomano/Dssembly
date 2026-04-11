@@ -63,6 +63,41 @@ void freeTokensContents(tokens_t *tokens)
             tokens->tokens[i] = NULL;
         }
     }
+
+    tokens->tokenCount = 0;
+}
+
+static void removeCommentTokens(tokens_t *tokens)
+{
+    bool hitComment = false;
+
+    if (NULL == tokens)
+    {
+        return;
+    }
+
+    for (uint8_t i = 0; i < MAX_TOKENS; i++)
+    {
+        if (NULL == tokens->tokens[i])
+        {
+            return;
+        }
+
+        if (true == hitComment)
+        {
+            free(tokens->tokens[i]);
+            tokens->tokens[i] = NULL;
+            continue;
+        }
+
+        if (0 == strncmp(tokens->tokens[i], COMMENT_PREFIX, strlen(COMMENT_PREFIX)))
+        {
+            hitComment = true;
+            free(tokens->tokens[i]);
+            tokens->tokens[i] = NULL;
+            tokens->tokenCount = i;
+        }
+    }
 }
 
 bool parseTokens(char* inputBuffer, tokens_t *tokens)
@@ -131,6 +166,10 @@ bool parseTokens(char* inputBuffer, tokens_t *tokens)
         last = current;
         current = inputBuffer[++currentIndex];
     }
+
+    tokens->tokenCount = numTokens;
+
+    removeCommentTokens(tokens);
 
     return true;
 }
