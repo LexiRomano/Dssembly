@@ -39,11 +39,6 @@ void freeInstructionListContents(instructionList_t *instructionList)
     current = instructionList->first;
     while (NULL != current)
     {
-        if (NULL != current->label)
-        {
-            free(current->label);
-        }
-
         if (NULL != current->targetLabel)
         {
             free(current->targetLabel);
@@ -56,6 +51,59 @@ void freeInstructionListContents(instructionList_t *instructionList)
 
     instructionList->first = NULL;
     instructionList->last  = NULL;
+}
+
+label_t *addNewLabel(labelList_t *labelList)
+{
+    if (NULL == labelList)
+    {
+        return NULL;
+    }
+
+    if (NULL == labelList->first)
+    {
+        labelList->first = calloc(1, sizeof(labelList_t));
+        labelList->last = labelList->first;
+
+        return labelList->last;
+    }
+
+    if (NULL == labelList->last)
+    {
+        return NULL;
+    }
+
+    labelList->last->next = calloc(1, sizeof(labelList_t));
+    labelList->last = labelList->last->next;
+
+    return labelList->last;
+}
+
+void freeLabelListContents(labelList_t *labelList)
+{
+    label_t *current = NULL;
+    label_t *next    = NULL;
+
+    if (NULL == labelList)
+    {
+        return;
+    }
+
+    current = labelList->first;
+    while (NULL != current)
+    {
+        if (NULL != current->label)
+        {
+            free(current->label);
+        }
+
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    labelList->first = NULL;
+    labelList->last  = NULL;
 }
 
 void freeTokensContents(tokens_t *tokens)

@@ -8,6 +8,8 @@
 #define COMMENT_PREFIX "//"
 #define OP_CODE_MAX_LEN 32
 
+#define INTERNAL_ERROR printf("Internal error: %s:%d\n", __FUNCTION__, __LINE__)
+
 typedef enum
 {
     form_1 = 0,
@@ -24,11 +26,12 @@ typedef struct instruction_t
     uint8_t               opCode;
     bool                  hasInstructionAugment;
     uint8_t               instructionAugment;
-    char                 *label;
     uint8_t               regsel1;
     uint8_t               regsel2;
     uint8_t               regsel3;
-    bool                  argAugment;
+    bool                  hasArgAugment;
+    uint32_t              lineNumber;
+    uint32_t              address;
     uint32_t              immediate;
     char                 *targetLabel;
     struct instruction_t *targetLabel_p;
@@ -40,6 +43,19 @@ typedef struct
     instruction_t *first;
     instruction_t *last;
 } instructionList_t;
+
+typedef struct label_t
+{
+    char           *label;
+    instruction_t  *instruction;
+    struct label_t *next;
+} label_t;
+
+typedef struct
+{
+    label_t *first;
+    label_t *last;
+} labelList_t;
 
 typedef struct
 {
@@ -68,6 +84,10 @@ typedef struct
 instruction_t *addNewInstruction(instructionList_t *instructionList);
 
 void freeInstructionListContents(instructionList_t *instructionList);
+
+label_t *addNewLabel(labelList_t *labelList);
+
+void freeLabelListContents(labelList_t *labelList);
 
 void freeTokensContents(tokens_t *tokens);
 

@@ -4,6 +4,7 @@ static FILE *inputFile          = NULL;
 static char *outputFileLocation = NULL;
 
 static instructionList_t instructionList = {0};
+static labelList_t       labelList       = {0};
 
 static instructionDescriptor_t instructionDescriptors[] =
 {
@@ -124,8 +125,7 @@ static bool isValidRegsel(char *str)
 
 static bool parseFormAndRegsel(tokens_t                *tokens,
                                instruction_t           *instruction,
-                               instructionDescriptor_t *descriptor,
-                               uint32_t                 lineNumber)
+                               instructionDescriptor_t *descriptor)
 {
     uint8_t minimumRegselCount = 0;
     bool    isAlternateForm    = false;
@@ -133,7 +133,7 @@ static bool parseFormAndRegsel(tokens_t                *tokens,
     if (NULL == tokens ||
         NULL == descriptor)
     {
-        printf("Internal error\n");
+        INTERNAL_ERROR;
         return false;
     }
     
@@ -142,11 +142,11 @@ static bool parseFormAndRegsel(tokens_t                *tokens,
     {
         if (tokens->tokenCount - 1 > formArgCount[descriptor->primaryForm])
         {
-            printf("Error on line %u: Too many arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+            printf("Error on line %u: Too many arguments for instruction \"%s\"\n", instruction->lineNumber, tokens->tokens[0]);
         }
         else
         {
-            printf("Error on line %u: Too few arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+            printf("Error on line %u: Too few arguments for instruction \"%s\"\n", instruction->lineNumber, tokens->tokens[0]);
         }
         return false;
     }
@@ -165,7 +165,7 @@ static bool parseFormAndRegsel(tokens_t                *tokens,
         case 3:
             if (false == isValidRegsel(tokens->tokens[3]))
             {
-                printf("Error on line %u: Argument #3 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                printf("Error on line %u: Argument #3 for \"%s\" must be a regsel\n", instruction->lineNumber, tokens->tokens[0]);
                 return false;
             }
 
@@ -174,7 +174,7 @@ static bool parseFormAndRegsel(tokens_t                *tokens,
         case 2:
             if (false == isValidRegsel(tokens->tokens[2]))
             {
-                printf("Error on line %u: Argument #2 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                printf("Error on line %u: Argument #2 for \"%s\" must be a regsel\n", instruction->lineNumber, tokens->tokens[0]);
                 return false;
             }
 
@@ -183,7 +183,7 @@ static bool parseFormAndRegsel(tokens_t                *tokens,
         case 1:
             if (false == isValidRegsel(tokens->tokens[1]))
             {
-                printf("Error on line %u: Argument #1 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                printf("Error on line %u: Argument #1 for \"%s\" must be a regsel\n", instruction->lineNumber, tokens->tokens[0]);
                 return false;
             }
 
@@ -419,7 +419,7 @@ static bool validateLabel(char *str)
 {
     if (NULL == str)
     {
-        printf("Internal error\n");
+        INTERNAL_ERROR;
         return false;
     }
 
@@ -449,8 +449,7 @@ static bool validateLabel(char *str)
 
 static bool parseInstructionArguments(tokens_t                *tokens,
                                       instruction_t           *instruction,
-                                      instructionDescriptor_t *descriptor,
-                                      uint32_t                 lineNumber)
+                                      instructionDescriptor_t *descriptor)
 {
     form_e form            = 0;
     bool   isAlternateForm = false;
@@ -460,7 +459,7 @@ static bool parseInstructionArguments(tokens_t                *tokens,
         NULL == instruction ||
         NULL == descriptor)
     {
-        printf("Internal error\n");
+        INTERNAL_ERROR;
         return false;
     }
 
@@ -489,14 +488,14 @@ static bool parseInstructionArguments(tokens_t                *tokens,
     {
         if (false == descriptor->takesAddress)
         {
-            printf("Error on line %u: Malformed literal \"%s\"\n", lineNumber, argument);
+            printf("Error on line %u: Malformed literal \"%s\"\n", instruction->lineNumber, argument);
             return false;
         }
 
         if (false == validateLabel(argument))
         {
             // No way this could be a label
-            printf("Error on line %u: Invalid argument \"%s\"\n", lineNumber, argument);
+            printf("Error on line %u: Invalid argument \"%s\"\n", instruction->lineNumber, argument);
             return false;
         }
 
@@ -507,52 +506,77 @@ static bool parseInstructionArguments(tokens_t                *tokens,
     else if (instruction->immediate > formMaxArgSize[form] &&
              false == descriptor->alternateFormUsesArgAugment)
     {
-        printf("Error on line %u: Literal too large for instruction \"%s\"\n", lineNumber, argument);
+        printf("Error on line %u: Literal too large for instruction \"%s\"\n", instruction->lineNumber, argument);
         return false;
     }
 
     return true;
 }
 
-static bool parseInstruction(tokens_t *tokens, instruction_t *instruction, char **label, uint32_t lineNumber)
+static uint8_t getInstructionSize(instruction_t *instruction)
 {
-    instructionDescriptor_t *descriptorInstance = NULL;
+    uint8_t size = 4;
 
-    if (NULL == tokens             ||
-        0    == tokens->tokenCount ||
-        NULL == instruction        ||
+    if (NULL == instruction)
+    {
+        return size;
+    }
+
+    if (instruction->hasInstructionAugment)
+    {
+        size += 1;
+    }
+
+    if (instruction->hasArgAugment)
+    {
+        size += 4;
+    }
+
+    return size;
+}
+
+static bool parseLabel(char *token, char **label, uint32_t lineNumber)
+{
+    if (NULL == token ||
         NULL == label)
     {
-        printf("Internal error\n");
+        INTERNAL_ERROR;
         return false;
     }
 
-    if (tokens->tokens[0][0] == ':')
+    if (strlen(token) == 0 ||
+        false == validateLabel(token))
     {
-        if (tokens->tokenCount > 1)
-        {
-            printf("Error on line %u: Broken label\n", lineNumber);
-            return false;
-        }
+        printf("Error on line %u: Invalid label \"%s\"\n", lineNumber, token);
+        return false;
+    }
 
-        // Labels
-        if (strlen(tokens->tokens[0]) == 1 ||
-            false == validateLabel(&(tokens->tokens[0][1])))
-        {
-            printf("Error on line %u: Invalid label \"%s\"\n", lineNumber, &(tokens->tokens[0][1]));
-            return false;
-        }
+    if (NULL != *label)
+    {
+        printf("Error on line %u: Cannot have more than one label in a row\n", lineNumber);
+        return false;
+    }
 
-        if (NULL != *label)
-        {
-            printf("Error on line %u: Cannot have more than one label in a row\n", lineNumber);
-            return false;
-        }
+    *label = calloc(strlen(token) + 1, sizeof(char));
+    snprintf(*label, strlen(token) + 1, "%s", token);
 
-        *label = calloc(strlen(&(tokens->tokens[0][1])) + 1, sizeof(char));
-        snprintf(*label, strlen(&(tokens->tokens[0][1])) + 1, "%s", &(tokens->tokens[0][1]));
+    return true;
+}
 
-        return true;
+static bool parseInstruction(tokens_t      *tokens,
+                             instruction_t *instruction,
+                             char          *label,
+                             uint32_t       address)
+{
+    instructionDescriptor_t *descriptorInstance = NULL;
+    label_t                 *tmpLabel           = NULL;
+
+    if (NULL == tokens             ||
+        0    == tokens->tokenCount ||
+        NULL == instruction)
+    {
+        INTERNAL_ERROR;
+        return false;
     }
 
     for (uint16_t i = 0; i < sizeof(instructionDescriptors) / sizeof(instructionDescriptor_t); i++)
@@ -561,47 +585,61 @@ static bool parseInstruction(tokens_t *tokens, instruction_t *instruction, char 
 
         if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr))
         {
-            if (false == parseFormAndRegsel(tokens, instruction, descriptorInstance, lineNumber))
+            if (false == parseFormAndRegsel(tokens, instruction, descriptorInstance))
             {
                 return false;
             }
 
-            if (false == parseInstructionArguments(tokens, instruction, descriptorInstance, lineNumber))
+            if (false == parseInstructionArguments(tokens, instruction, descriptorInstance))
             {
                 return false;
             }
 
-            if (NULL != *label)
+            if (NULL != label)
             {
-                instruction->label = *label;
-                *label = NULL;
+                tmpLabel = addNewLabel(&labelList);
+
+                if (NULL == tmpLabel)
+                {
+                    INTERNAL_ERROR;
+                    return false;
+                }
+
+                tmpLabel->instruction = instruction;
+                tmpLabel->label       = label;
             }
+
+            instruction->address = address;
             
             return true;
         }
     }
 
-    printf("Error on line %u: Invalid instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+    printf("Error on line %u: Invalid instruction \"%s\"\n", instruction->lineNumber, tokens->tokens[0]);
 
     return false;
 }
 
 static bool parseInputFile()
 {
-    char           inputBuffer[2048]  = {0};
-    instruction_t *currentInstruction = NULL;
-    tokens_t       tokens             = {0};
-    uint32_t       lineNumber         = 0;
-    char          *label              = NULL;
+    char           inputBuffer[2048]   = {0};
+    instruction_t *currentInstruction  = NULL;
+    instruction_t *previousInstruction = NULL;
+    tokens_t       tokens              = {0};
+    uint32_t       lineNumber          = 0;
+    char          *label               = NULL;
+    bool           labelFound          = false;
 
+    // First pass
     while (fgets(inputBuffer, sizeof(inputBuffer), inputFile))
     {
         lineNumber++;
 
         if (false == parseTokens(inputBuffer, &tokens))
         {
-            printf("Internal error\n");
+            INTERNAL_ERROR;
             freeInstructionListContents(&instructionList);
+            freeLabelListContents(&labelList);
             return false;
         }
 
@@ -610,23 +648,53 @@ static bool parseInputFile()
             continue;
         }
 
-        currentInstruction = addNewInstruction(&instructionList);
-
-        if (NULL == currentInstruction)
+        if (tokens.tokens[0][0] == ':' )
         {
-            printf("Internal error\n");
-            freeTokensContents(&tokens);
-            freeInstructionListContents(&instructionList);
-            fclose(inputFile);
-            return false;
+            if (false == parseLabel(&(tokens.tokens[0][1]), &label, lineNumber))
+            {
+                return false;
+            }
         }
-
-        if (false == parseInstruction(&tokens, currentInstruction, &label, lineNumber))
+        else
         {
-            freeTokensContents(&tokens);
-            freeInstructionListContents(&instructionList);
-            fclose(inputFile);
-            return false;
+
+            currentInstruction = addNewInstruction(&instructionList);
+
+            if (NULL == currentInstruction)
+            {
+                INTERNAL_ERROR;
+                freeTokensContents(&tokens);
+                freeInstructionListContents(&instructionList);
+                freeLabelListContents(&labelList);
+                fclose(inputFile);
+                return false;
+            }
+
+            currentInstruction->lineNumber = lineNumber;
+
+            if (false == parseInstruction(&tokens,
+                                          currentInstruction,
+                                          label,
+                                          previousInstruction == NULL ?
+                                              0 : previousInstruction->address + getInstructionSize(previousInstruction)))
+            {
+                if (NULL != label)
+                {
+                    free(label);
+                }
+                freeTokensContents(&tokens);
+                freeInstructionListContents(&instructionList);
+                freeLabelListContents(&labelList);
+                fclose(inputFile);
+                return false;
+            }
+
+            if (NULL != label)
+            {
+                label = NULL;
+            }
+
+            previousInstruction = currentInstruction;
         }
     }
 
@@ -638,7 +706,43 @@ static bool parseInputFile()
         printf("Error on line %u: Dangling label at end of file\n", lineNumber);
         free(label);
         freeInstructionListContents(&instructionList);
+        freeLabelListContents(&labelList);
         return false;
+    }
+
+    // Second pass
+    if (NULL == instructionList.first)
+    {
+        return true;
+    }
+
+    for (currentInstruction = instructionList.first; NULL != currentInstruction; currentInstruction = currentInstruction->next)
+    {
+        if (NULL == currentInstruction->targetLabel)
+        {
+            continue;
+        }
+
+        if (NULL != currentInstruction->targetLabel)
+        {
+            labelFound = false;
+            for (label_t *labelInstance = labelList.first; labelInstance != NULL; labelInstance = labelInstance->next)
+            {
+                if (0 == strcmp(currentInstruction->targetLabel, labelInstance->label))
+                {
+                    labelFound = true;
+                    currentInstruction->targetLabel_p = labelInstance->instruction;
+                }
+            }
+
+            if (false == labelFound)
+            {
+                printf("Error on line %u: could not find label \"%s\"\n", currentInstruction->lineNumber, currentInstruction->targetLabel);
+                freeInstructionListContents(&instructionList);
+                freeLabelListContents(&labelList);
+                return false;
+            }
+        }
     }
 
     return true;
