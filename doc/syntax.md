@@ -42,7 +42,7 @@ LOAD-<wordGeometry>-<addressingMode> dest src
 // describes how many bytes to load and how to put them in `dest` (see
 // Word Geometry section).
 
-STOR-<wordGeometry>-<addressingMode> dest src
+STOR-<wordGeometry>-<addressingMode> src dest
 // Stores a value from a register into memory. `src` is the register to store
 // in memory. `dest` specifies the location in memory to store to. It can be
 // an immediate value, a register, or a label. `addressingMode` selects how
@@ -103,7 +103,7 @@ PUSH src
 // Pushes the `src` register to the stack.
 
 POP  dest
-// Pops the `dest` register from the stack into `dest.
+// Pops the `dest` register from the stack into `dest`.
 
 PUSHALL
 // Pushes all of the general purpose registers plus the flags register to the
@@ -116,9 +116,6 @@ POPALL
 PEEK dest
 // Peeks the top of the stack into the `dest` register without removing it from
 // the stack.
-
-INITSTACK
-// Initializes the stack. No arguments.
 
 RETURN
 // Returns using a return address pushed by a BR command that used the `P` flag.
@@ -138,6 +135,9 @@ INTFIN
 // Finishes the handling of an interrupt. Will return to where the processor
 // was executing before the interrupt was triggered. Will also resume allowing
 // other interrupts to get triggered. No arguments.
+
+INTGPR dest
+// Gets the parameter of the interrupt. Loads it into `dest`.
 
 GETABS-<addressingMode> dest address
 // Gets the absolute memory address after computing with an addressing mode.

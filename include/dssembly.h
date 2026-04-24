@@ -8,6 +8,11 @@
 #define COMMENT_PREFIX "//"
 #define OP_CODE_MAX_LEN 32
 
+#define OP_CODE_OFFSET 24
+#define REGSEL_1_OFFSET 20
+#define REGSEL_2_OFFSET 16
+#define REGSEL_3_OFFSET 12
+
 #define INTERNAL_ERROR printf("Internal error: %s:%d\n", __FUNCTION__, __LINE__)
 
 typedef enum
@@ -26,6 +31,7 @@ typedef struct instruction_t
     uint8_t               opCode;
     bool                  hasInstructionAugment;
     uint8_t               instructionAugment;
+    uint8_t               regselCount;
     uint8_t               regsel1;
     uint8_t               regsel2;
     uint8_t               regsel3;
