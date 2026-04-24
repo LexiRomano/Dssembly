@@ -323,9 +323,9 @@ static uint32_t formMaxArgSize[] =
     0,         // form_2
     0xFFFF,    // form_3
     0,         // form_4
-    0xFFFFFF,  // form_5
+    0xFFFFF,   // form_5
     0,         // form_6
-    0xFFFFFFF, // form_7
+    0xFFFFFF,  // form_7
 };
 
 static bool parseArgs(int argc, char* argv[])
