@@ -290,9 +290,12 @@ static char regselDescriptors[][3] =
     "G7",
     "OA",
     "OB",
+    "OC",
     "SB",
     "SS",
-    "IL"
+    "SP",
+    "IL",
+    "FL"
 };
 
 static uint8_t formArgCount[] = 
