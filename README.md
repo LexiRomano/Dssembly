@@ -12,6 +12,12 @@ To build Dssembly, run:
 bash$ ./make
 ```
 
+Once built, use dssembly as such:
+
+```
+bash$ ./dssembly <inputFileName> <outputFileName>
+```
+
 ## Resources
 
 See `doc/syntax.md` for a list of commands and syntax examples.

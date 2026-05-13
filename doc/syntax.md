@@ -10,7 +10,11 @@
 
 `SS`: Stack size - 16bit
 
+`SP`: Stack pointer - 16bit
+
 `IL`: Interrupt table location - 32bit
+
+`FL`: Flags register - 8bit
 
 ## Literals
 
@@ -18,7 +22,12 @@ Literals can be specified as hexadecimal with `0x`, binary with `0b`, or decimal
 
 ## Labels
 
-Labels are created with a preceding `:` and are referenced with a `$` prefix.
+Labels are created with a preceding `:` and are referenced simply by name. For example:
+
+```
+:myLabel
+    BRAL myLabel
+```
 
 ## Comments
 
@@ -182,8 +191,7 @@ None: The memory address will be interpreted as relative to the command. Jumps t
 
 ### Word Geometry
 
-By default, a LOAD or STORE command will interact with 4 bytes (or 2 bytes for the SS register). You can select different word sizes and offsets within the register using
-the following flags:
+By default, a LOAD or STORE command will interact with 4 bytes. You can select different word sizes (W) and offsets (S) within the register using the following flags:
 
 ```
 W2S0 - Selects a 2 byte word with a 0 byte shift:
@@ -229,29 +237,29 @@ W1S3 - Selects a 1 byte word with a 3 byte shift:
      Selected
 ```
 
-Note that only `W1S0` and `W1S1` are applicable to the `SS` register.
+Note that using a word size larger than the register it is bound for may result in undesired behaviour. For example, when doing a `LOAD` into `SP` with no specified word geometry, the processor will try to fit 32 bits into a 16 bit register. Therefore, a W2S* or W1S* word geometry must be used.
 
 ## Example Code
 Checks to see if a byte in memory is 7 or lower. If it is, terminate. If it's not, shift it to the left by how much higher it was than 7, store it in memory, jump to some specific location in absolute memory space, and return.
 
 ```
 // Load a single byte into G0 using the OC register as offset
-LOAD-W1S0-OC  G0 *0x1000
+    LOAD-W1S0-OC  G0 0x1000
 
 // Check if its 7 or lower
-COMP          G0 7
-BRHE          $finish
+    COMP          G0 7
+    BRLS          finish
 
 // Not 7
-AND           G0 G0 0x000000FF
-SUB           G1 G0 7
-BSLC          G0 G0 G1
-STOR-OC       *0x1004 G0
+    AND           G0 G0 0x000000FF
+    SUB           G1 G0 7
+    BSLC          G0 G0 G1
+    STOR-OC       G0 0x1004
 
 // Some important system call
-BRAL-ABS      $0x90FE
+    BRAL-ABS      0x90FE
 
 :finish
-TERM
+    TERM
 
 ```
