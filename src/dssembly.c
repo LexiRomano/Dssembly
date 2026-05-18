@@ -16,7 +16,7 @@ static instructionDescriptor_t instructionDescriptors[] =
 //                                                       hasInstructionAugment 
 //                                                              instructionAugment 
 //                                                                    alternateFormUsesArgAugment 
-//                                                                           takesAddress
+//                                                                           takesLabel
     {"MOVE",          0x06, form_2, true,  0x07, form_5, false, 0,    false, false},
     {"ADD",           0x18, form_1, true,  0x19, form_3, false, 0,    false, false},
     {"SUB",           0x28, form_1, true,  0x29, form_3, false, 0,    false, false},
@@ -1071,6 +1071,11 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
         }
         else
         {
+            if (false == descriptor->takesLabel)
+            {
+                printf("Error on line %u: cannot use a label as an argument for \"%s\"\n", lineNumber, tokens->tokens[0]);
+                return false;
+            }
             literalValue = label->address - address;
         }
 
@@ -1093,7 +1098,11 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
     return true;
 }
 
-static bool parseArgumentAugment(tokens_t *tokens, uint32_t address, uint32_t lineNumber, FILE *outputFile)
+static bool parseArgumentAugment(tokens_t                *tokens,
+                                 uint32_t                 address,
+                                 instructionDescriptor_t *descriptor,
+                                 uint32_t                 lineNumber,
+                                 FILE                    *outputFile)
 {
     char    *literalArgument = NULL;
     label_t *label           = 0;
@@ -1124,6 +1133,11 @@ static bool parseArgumentAugment(tokens_t *tokens, uint32_t address, uint32_t li
     }
     else
     {
+        if (false == descriptor->takesLabel)
+        {
+            printf("Error on line %u: cannot use a label as an argument for \"%s\"\n", lineNumber, tokens->tokens[0]);
+            return false;
+        }
         literalValue = label->address - address;
     }
 
@@ -1175,7 +1189,11 @@ static bool parseInstruction(tokens_t *tokens, uint32_t lineNumber, FILE *output
             }
 
             if (requiresArgAugment &&
-                false == parseArgumentAugment(tokens, address, lineNumber, outputFile))
+                false == parseArgumentAugment(tokens,
+                                              address,
+                                              descriptorInstance,
+                                              lineNumber,
+                                              outputFile))
             {
                 return false;
             }

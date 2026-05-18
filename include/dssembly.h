@@ -70,7 +70,7 @@ typedef struct
     uint8_t instructionAugment;
 
     bool    alternateFormUsesArgAugment;
-    bool    takesAddress;
+    bool    takesLabel;
 } instructionDescriptor_t;
 
 typedef struct
