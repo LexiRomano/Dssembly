@@ -9,7 +9,7 @@ Dssembly is an assembly language for the DGC-32 computer architecture.
 To build Dssembly, run:
 
 ```
-bash$ ./make
+bash$ ./make.sh
 ```
 
 Once built, use dssembly as such:

@@ -1,58 +1,5 @@
 #include "dssembly.h"
 
-instruction_t *addNewInstruction(instructionList_t *instructionList)
-{
-    if (NULL == instructionList)
-    {
-        return NULL;
-    }
-
-    if (NULL == instructionList->first)
-    {
-        instructionList->first = calloc(1, sizeof(instruction_t));
-        instructionList->last = instructionList->first;
-
-        return instructionList->last;
-    }
-
-    if (NULL == instructionList->last)
-    {
-        return NULL;
-    }
-
-    instructionList->last->next = calloc(1, sizeof(instruction_t));
-    instructionList->last = instructionList->last->next;
-
-    return instructionList->last;
-}
-
-void freeInstructionListContents(instructionList_t *instructionList)
-{
-    instruction_t *current = NULL;
-    instruction_t *next    = NULL;
-
-    if (NULL == instructionList)
-    {
-        return;
-    }
-
-    current = instructionList->first;
-    while (NULL != current)
-    {
-        if (NULL != current->targetLabel)
-        {
-            free(current->targetLabel);
-        }
-
-        next = current->next;
-        free(current);
-        current = next;
-    }
-
-    instructionList->first = NULL;
-    instructionList->last  = NULL;
-}
-
 label_t *addNewLabel(labelList_t *labelList)
 {
     if (NULL == labelList)
@@ -62,7 +9,7 @@ label_t *addNewLabel(labelList_t *labelList)
 
     if (NULL == labelList->first)
     {
-        labelList->first = calloc(1, sizeof(labelList_t));
+        labelList->first = calloc(1, sizeof(label_t));
         labelList->last = labelList->first;
 
         return labelList->last;
@@ -73,10 +20,34 @@ label_t *addNewLabel(labelList_t *labelList)
         return NULL;
     }
 
-    labelList->last->next = calloc(1, sizeof(labelList_t));
+    labelList->last->next = calloc(1, sizeof(label_t));
     labelList->last = labelList->last->next;
 
     return labelList->last;
+}
+
+label_t *getLabel(labelList_t *labelList, char *name)
+{
+    if (NULL == name ||
+        NULL == labelList)
+    {
+        return NULL;
+    }
+
+    for (label_t *l = labelList->first; l != NULL; l = l->next)
+    {
+        if (NULL == l->label)
+        {
+            return NULL;
+        }
+
+        if (0 == strcmp(l->label, name))
+        {
+            return l;
+        }
+    }
+
+    return NULL;
 }
 
 void freeLabelListContents(labelList_t *labelList)
@@ -104,6 +75,83 @@ void freeLabelListContents(labelList_t *labelList)
 
     labelList->first = NULL;
     labelList->last  = NULL;
+}
+
+alias_t *addNewAlias(aliasList_t *aliasList)
+{
+    if (NULL == aliasList)
+    {
+        return NULL;
+    }
+
+    if (NULL == aliasList->first)
+    {
+        aliasList->first = calloc(1, sizeof(alias_t));
+        aliasList->last = aliasList->first;
+
+        return aliasList->last;
+    }
+
+    if (NULL == aliasList->last)
+    {
+        return NULL;
+    }
+
+    aliasList->last->next = calloc(1, sizeof(alias_t));
+    aliasList->last = aliasList->last->next;
+
+    return aliasList->last;
+}
+
+alias_t *getAlias(aliasList_t *aliasList, char *name)
+{
+    if (NULL == name ||
+        NULL == aliasList)
+    {
+        return NULL;
+    }
+
+    for (alias_t *a = aliasList->first; a != NULL; a = a->next)
+    {
+        if (NULL == a->alias)
+        {
+            return NULL;
+        }
+
+        if (0 == strcmp(a->alias, name))
+        {
+            return a;
+        }
+    }
+
+    return NULL;
+}
+
+void freeAliasListContents(aliasList_t *aliasList)
+{
+    alias_t *current = NULL;
+    alias_t *next    = NULL;
+
+    if (NULL == aliasList)
+    {
+        return;
+    }
+
+    current = aliasList->first;
+    while (NULL != current)
+    {
+        if (NULL != current->alias)
+        {
+            free(current->alias);
+        }
+
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    aliasList->first = NULL;
+    aliasList->last  = NULL;
 }
 
 void freeTokensContents(tokens_t *tokens)
@@ -230,4 +278,50 @@ bool parseTokens(char* inputBuffer, tokens_t *tokens)
     removeCommentTokens(tokens);
 
     return true;
+}
+
+bool isAlphanumericString(char *input)
+{
+    char     c = '0';
+    uint32_t i = -1;
+
+    c = input[0];
+
+    if (c >= '0' && c <= '9')
+    {
+        return false;
+    }
+
+    while (true)
+    {
+        i++;
+        c = input[i];
+
+        if (c == '\0')
+        {
+            return true;
+        }
+
+        if (c >= 'a' && c <= 'z')
+        {
+            continue;
+        }
+
+        if (c >= 'A' && c <= 'Z')
+        {
+            continue;
+        }
+
+        if (c >= '0' && c <= '9')
+        {
+            continue;
+        }
+
+        if (c == '_')
+        {
+            continue;
+        }
+
+        return false;
+    }
 }

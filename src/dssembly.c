@@ -3,8 +3,8 @@
 static FILE *inputFile          = NULL;
 static char *outputFileLocation = NULL;
 
-static instructionList_t instructionList = {0};
-static labelList_t       labelList       = {0};
+static labelList_t labelList = {0};
+static aliasList_t aliasList = {0};
 
 static instructionDescriptor_t instructionDescriptors[] =
 {// instructionStr 
@@ -29,17 +29,17 @@ static instructionDescriptor_t instructionDescriptors[] =
     {"BSLC",          0x98, form_1, true,  0x99, form_3, false, 0,    false, false},
     {"BSRC",          0xA8, form_1, true,  0xA9, form_3, false, 0,    false, false},
     {"COMP",          0x0A, form_2, true,  0x0B, form_4, false, 0,    true,  false},
-    {"PUSH",          0x0E, form_4, false, 0,    0,      0,     0,    false, false},
-    {"POP",           0x1E, form_4, false, 0,    0,      0,     0,    false, false},
-    {"PUSHALL",       0x2E, form_6, false, 0,    0,      0,     0,    false, false},
-    {"POPALL",        0x3E, form_6, false, 0,    0,      0,     0,    false, false},
-    {"PEEK",          0x4E, form_4, false, 0,    0,      0,     0,    false, false},
-    {"RETURN",        0x5E, form_6, false, 0,    0,      0,     0,    false, false},
-    {"INTSUS",        0x01, form_6, false, 0,    0,      0,     0,    false, false},
-    {"INTRES",        0x11, form_6, false, 0,    0,      0,     0,    false, false},
-    {"INTTRG",        0x21, form_4, true,  0x31, form_7, 0,     0,    false, false},
-    {"INTFIN",        0x41, form_6, false, 0,    0,      0,     0,    false, false},
-    {"INTGPR",        0x51, form_4, false, 0,    0,      0,     0,    false, false},
+    {"PUSH",          0x0E, form_4, false, 0,    0,      false, 0,    false, false},
+    {"POP",           0x1E, form_4, false, 0,    0,      false, 0,    false, false},
+    {"PUSHALL",       0x2E, form_6, false, 0,    0,      false, 0,    false, false},
+    {"POPALL",        0x3E, form_6, false, 0,    0,      false, 0,    false, false},
+    {"PEEK",          0x4E, form_4, false, 0,    0,      false, 0,    false, false},
+    {"RETURN",        0x5E, form_6, false, 0,    0,      false, 0,    false, false},
+    {"INTSUS",        0x01, form_6, false, 0,    0,      false, 0,    false, false},
+    {"INTRES",        0x11, form_6, false, 0,    0,      false, 0,    false, false},
+    {"INTTRG",        0x21, form_4, true,  0x31, form_7, false, 0,    false, false},
+    {"INTFIN",        0x41, form_6, false, 0,    0,      false, 0,    false, false},
+    {"INTGPR",        0x51, form_4, false, 0,    0,      false, 0,    false, false},
     {"LOAD",          0x02, form_2, true,  0x03, form_4, true,  0x80, true,  true},
     {"LOAD-ABS",      0x02, form_2, true,  0x03, form_4, true,  0x00, true,  false},
     {"LOAD-OA",       0x02, form_2, true,  0x03, form_4, true,  0x01, true,  false},
@@ -392,131 +392,6 @@ static bool isValidRegsel(char *str)
     return false;
 }
 
-static bool parseFormAndRegsel(tokens_t                *tokens,
-                               instruction_t           *instruction,
-                               instructionDescriptor_t *descriptor)
-{
-    uint8_t minimumRegselCount = 0;
-    bool    isAlternateForm    = false;
-
-    if (NULL == tokens ||
-        NULL == descriptor)
-    {
-        INTERNAL_ERROR;
-        return false;
-    }
-    
-
-    if (tokens->tokenCount - 1 != formArgCount[descriptor->primaryForm])
-    {
-        if (tokens->tokenCount - 1 > formArgCount[descriptor->primaryForm])
-        {
-            printf("Error on line %u: Too many arguments for instruction \"%s\"\n", instruction->lineNumber, tokens->tokens[0]);
-        }
-        else
-        {
-            printf("Error on line %u: Too few arguments for instruction \"%s\"\n", instruction->lineNumber, tokens->tokens[0]);
-        }
-        return false;
-    }
-
-    if (true == descriptor->hasAlternateForm)
-    {
-        minimumRegselCount = formRegselCount[descriptor->alternateForm];
-    }
-    else
-    {
-        minimumRegselCount = formRegselCount[descriptor->primaryForm];
-    }
-
-    instruction->regselCount = minimumRegselCount;
-
-    switch (minimumRegselCount)
-    {
-        case 3:
-            if (false == isValidRegsel(tokens->tokens[3]))
-            {
-                printf("Error on line %u: Argument #3 for \"%s\" must be a regsel\n", instruction->lineNumber, tokens->tokens[0]);
-                return false;
-            }
-
-            instruction->regsel3 = getRegsel(tokens->tokens[3]);
-
-        case 2:
-            if (false == isValidRegsel(tokens->tokens[2]))
-            {
-                printf("Error on line %u: Argument #2 for \"%s\" must be a regsel\n", instruction->lineNumber, tokens->tokens[0]);
-                return false;
-            }
-
-            instruction->regsel2 = getRegsel(tokens->tokens[2]);
-
-        case 1:
-            if (false == isValidRegsel(tokens->tokens[1]))
-            {
-                printf("Error on line %u: Argument #1 for \"%s\" must be a regsel\n", instruction->lineNumber, tokens->tokens[0]);
-                return false;
-            }
-
-            instruction->regsel1 = getRegsel(tokens->tokens[1]);
-
-        default:
-            break;
-    }
-
-    if (true == descriptor->hasAlternateForm)
-    {
-        isAlternateForm = true;
-        switch (formRegselCount[descriptor->primaryForm])
-        {
-            case 3:
-                if (true == isValidRegsel(tokens->tokens[3]))
-                {
-                    instruction->regsel3 = getRegsel(tokens->tokens[3]);
-                    instruction->regselCount = 3;
-                    isAlternateForm = false;
-                }
-                break;
-            
-            case 2:
-                if (true == isValidRegsel(tokens->tokens[2]))
-                {
-                    instruction->regsel2 = getRegsel(tokens->tokens[2]);
-                    instruction->regselCount = 2;
-                    isAlternateForm = false;
-                }
-                break;
-
-            case 1:
-                if (true == isValidRegsel(tokens->tokens[1]))
-                {
-                    instruction->regsel1 = getRegsel(tokens->tokens[1]);
-                    instruction->regselCount = 1;
-                    isAlternateForm = false;
-                }
-                break;
-        }
-    }
-
-    if (isAlternateForm)
-    {
-        instruction->opCode        = descriptor->opCodeAlternateVal;
-        instruction->hasArgAugment = descriptor->alternateFormUsesArgAugment;
-    }
-    else
-    {
-        instruction->opCode = descriptor->opCodePrimaryVal;
-    }
-
-    if (descriptor->hasInstructionAugment)
-    {
-        instruction->hasInstructionAugment = true;
-        instruction->instructionAugment    = descriptor->instructionAugment;
-    }
-
-    return true;
-}
-
 static bool parseBinary(char *str, uint32_t *out)
 {
     uint64_t sum = 0;
@@ -663,10 +538,10 @@ static bool parseHexadecimal(char *str, uint32_t *out)
     return true;
 }
 
-static bool parseLiteral(char *literal, instruction_t *instruction)
+static bool parseLiteral(char *literal, uint32_t *out)
 {
     if (NULL == literal ||
-        NULL == instruction)
+        NULL == out)
     {
         return false;
     }
@@ -677,178 +552,26 @@ static bool parseLiteral(char *literal, instruction_t *instruction)
         if (0 == strncmp(literal, "0b", 2))
         {
             // Binary
-            return parseBinary(&(literal[2]), &(instruction->immediate));
+            return parseBinary(&(literal[2]), out);
 
         }
         else if (0 == strncmp(literal, "0x", 2))
         {
             // Hexadecimal
-            return parseHexadecimal(&(literal[2]), &(instruction->immediate));
+            return parseHexadecimal(&(literal[2]), out);
         }
     }
 
-    return  parseDecimal(literal, &(instruction->immediate));;
+    return parseDecimal(literal, out);;
 }
 
-static bool validateLabel(char *str)
-{
-    if (NULL == str)
-    {
-        INTERNAL_ERROR;
-        return false;
-    }
-
-    if (true == isValidRegsel(str))
-    {
-        return false;
-    }
-
-    switch (str[0])
-    {
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-        case ':':
-            return false;
-    }
-
-    return true;
-}
-
-static bool parseInstructionArguments(tokens_t                *tokens,
-                                      instruction_t           *instruction,
-                                      instructionDescriptor_t *descriptor)
-{
-    form_e form            = 0;
-    bool   isAlternateForm = false;
-    char  *argument        = NULL;
-
-    if (NULL == tokens      ||
-        NULL == instruction ||
-        NULL == descriptor)
-    {
-        INTERNAL_ERROR;
-        return false;
-    }
-
-    if (instruction->opCode == descriptor->opCodePrimaryVal)
-    {
-        form = descriptor->primaryForm;
-    }
-    else
-    {
-        isAlternateForm = true;
-        form = descriptor->alternateForm;
-    }
-
-    if (formArgCount[form] == formRegselCount[form] &&
-        ((true  == isAlternateForm &&
-          false == descriptor->alternateFormUsesArgAugment) ||
-        false == isAlternateForm))
-    {
-        // All regsel or no argument
-        return true;
-    }
-
-    argument = tokens->tokens[tokens->tokenCount - 1];
-
-    if (false == parseLiteral(argument, instruction))
-    {
-        if (false == descriptor->takesAddress)
-        {
-            printf("Error on line %u: Malformed literal \"%s\"\n", instruction->lineNumber, argument);
-            return false;
-        }
-
-        if (false == validateLabel(argument))
-        {
-            // No way this could be a label
-            printf("Error on line %u: Invalid argument \"%s\"\n", instruction->lineNumber, argument);
-            return false;
-        }
-
-        // Treat as a label for now.
-        instruction->targetLabel = calloc(strlen(argument) + 1, sizeof(char));
-        snprintf(instruction->targetLabel, strlen(argument) + 1, "%s", argument);
-    }
-    else if (instruction->immediate > formMaxArgSize[form] &&
-             false == descriptor->alternateFormUsesArgAugment)
-    {
-        printf("Error on line %u: Literal too large for instruction \"%s\"\n", instruction->lineNumber, argument);
-        return false;
-    }
-
-    return true;
-}
-
-static uint8_t getInstructionSize(instruction_t *instruction)
-{
-    uint8_t size = 4;
-
-    if (NULL == instruction)
-    {
-        return size;
-    }
-
-    if (instruction->hasInstructionAugment)
-    {
-        size += 1;
-    }
-
-    if (instruction->hasArgAugment)
-    {
-        size += 4;
-    }
-
-    return size;
-}
-
-static bool parseLabel(char *token, char **label, uint32_t lineNumber)
-{
-    if (NULL == token ||
-        NULL == label)
-    {
-        INTERNAL_ERROR;
-        return false;
-    }
-
-    if (strlen(token) == 0 ||
-        false == validateLabel(token))
-    {
-        printf("Error on line %u: Invalid label \"%s\"\n", lineNumber, token);
-        return false;
-    }
-
-    if (NULL != *label)
-    {
-        printf("Error on line %u: Cannot have more than one label in a row\n", lineNumber);
-        return false;
-    }
-
-    *label = calloc(strlen(token) + 1, sizeof(char));
-    snprintf(*label, strlen(token) + 1, "%s", token);
-
-    return true;
-}
-
-static bool parseInstruction(tokens_t      *tokens,
-                             instruction_t *instruction,
-                             char          *label,
-                             uint32_t       address)
+static int getInstructionSize(tokens_t *tokens, uint32_t lineNumber)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
-    label_t                 *tmpLabel           = NULL;
+    bool                     isAlternateForm    = false;
 
     if (NULL == tokens             ||
-        0    == tokens->tokenCount ||
-        NULL == instruction)
+        0    == tokens->tokenCount)
     {
         INTERNAL_ERROR;
         return false;
@@ -860,61 +583,629 @@ static bool parseInstruction(tokens_t      *tokens,
 
         if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr))
         {
-            if (false == parseFormAndRegsel(tokens, instruction, descriptorInstance))
+            if (tokens->tokenCount - 1 != formArgCount[descriptorInstance->primaryForm])
             {
-                return false;
-            }
-
-            if (false == parseInstructionArguments(tokens, instruction, descriptorInstance))
-            {
-                return false;
-            }
-
-            if (NULL != label)
-            {
-                tmpLabel = addNewLabel(&labelList);
-
-                if (NULL == tmpLabel)
+                if (tokens->tokenCount - 1 > formArgCount[descriptorInstance->primaryForm])
                 {
-                    INTERNAL_ERROR;
+                    printf("Error on line %u: too many arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+                }
+                else
+                {
+                    printf("Error on line %u: too few arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+                }
+                return -1;
+            }
+
+            // If the last argument is valid regsel, then we're not using alternate form.
+            isAlternateForm = !isValidRegsel(tokens->tokens[tokens->tokenCount - 1]);
+
+            if (false == isAlternateForm ||
+                false == descriptorInstance->alternateFormUsesArgAugment)
+            {
+                if (false == descriptorInstance->hasInstructionAugment)
+                {
+                    return 4;
+                }
+
+                return 5;
+            }
+
+            if (false == descriptorInstance->hasInstructionAugment)
+            {
+                return 8;
+            }
+
+            return 9;
+        }
+    }
+
+    printf("Error on line %u: Invalid instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+
+    return -1;
+}
+
+static bool parseLabel(tokens_t *tokens, uint32_t lineNumber, uint32_t address)
+{
+    label_t *newLabel          = NULL;
+    char    *labelWithoutColon = NULL;
+
+    if (tokens->tokenCount > 1)
+    {
+        printf("Error on line %u: Labels take no arguments\n", lineNumber);
+        return false;
+    }
+
+    if (1 == strlen(tokens->tokens[0]))
+    {
+        printf("Error on line %u: Label requires a name\n", lineNumber);
+        return false;
+    }
+
+    labelWithoutColon = &(tokens->tokens[0][1]);
+
+    if (true == isValidRegsel(labelWithoutColon))
+    {
+        printf("Error on line %u: Label name cannot be a regsel\n", lineNumber);
+        return false;
+    }
+
+    if (false == isAlphanumericString(labelWithoutColon))
+    {
+        printf("Error on line %u: label \"%s\" contains invalid characters\n", lineNumber, labelWithoutColon);
+        return false;
+    }
+
+    if (NULL != getLabel(&labelList, labelWithoutColon))
+    {
+        printf("Error on line %u: label \"%s\" already exists\n", lineNumber, labelWithoutColon);
+        return false;
+    }
+
+    if (NULL != getAlias(&aliasList, labelWithoutColon))
+    {
+        printf("Error on line %u: label \"%s\" conflicts with alias of the same name\n", lineNumber, labelWithoutColon);
+        return false;
+    }
+
+    newLabel = addNewLabel(&labelList);
+
+    if (NULL == newLabel)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    newLabel->label   = strcpy(calloc(strlen(labelWithoutColon) + 1, sizeof(char)), labelWithoutColon);
+    newLabel->address = address;
+
+    return true;
+}
+
+static bool parseAlias(tokens_t *tokens, uint32_t lineNumber)
+{
+    uint32_t buf32    = 0;
+    alias_t *newAlias = NULL;
+
+    if (tokens->tokenCount != 3)
+    {
+        printf("Error on line %u: alias requires two arguments\n", lineNumber);
+        return false;
+    }
+
+    if (false == isAlphanumericString(tokens->tokens[1]))
+    {
+        printf("Error on line %u: alias \"%s\" contains invalid characters\n", lineNumber, tokens->tokens[1]);
+        return false;
+    }
+
+    if (NULL != getAlias(&aliasList, tokens->tokens[1]))
+    {
+        printf("Error on line %u: alias \"%s\" already exists\n", lineNumber, tokens->tokens[1]);
+        return false;
+    }
+
+    if (NULL != getLabel(&labelList, tokens->tokens[1]))
+    {
+        printf("Error on line %u: alias \"%s\" conflicts with label of the same name\n", lineNumber, tokens->tokens[1]);
+        return false;
+    }
+
+    if (false == parseLiteral(tokens->tokens[2], &buf32))
+    {
+        printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[2]);
+        return false;
+    }
+
+    newAlias = addNewAlias(&aliasList);
+
+    if (NULL == newAlias)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    newAlias->alias  = strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)), tokens->tokens[1]);
+    newAlias->value = buf32;
+
+    return true;
+}
+
+static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
+{
+    uint32_t buf32 = 0;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], ALIAS_STR))
+    {
+        if (false == parseAlias(tokens, lineNumber))
+        {
+            return -1;
+        }
+        return 0;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], RESERVE_STR))
+    {
+        if (2 != tokens->tokenCount)
+        {
+            printf("Error on line %u: reserve directive takes one argument\n", lineNumber);
+            return false;
+        }
+
+        if (false == parseLiteral(tokens->tokens[1], &buf32))
+        {
+            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        return buf32;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], SET_STR))
+    {
+        if (3 != tokens->tokenCount)
+        {
+            printf("Error on line %u: set directive takes two argument\n", lineNumber);
+            return false;
+        }
+
+        if (1   == strlen(tokens->tokens[1]) &&
+            '*' == tokens->tokens[1][0])
+        {
+            return strlen(tokens->tokens[2]) + 1;
+        }
+
+        if (false == parseLiteral(tokens->tokens[1], &buf32))
+        {
+            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        return buf32;
+    }
+
+    printf("Error on line %u: invalid directive \"%s\"\n", lineNumber, tokens->tokens[0]);
+    return -1;
+}
+
+static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, FILE *outputFile)
+{
+    uint32_t reserveSize = 0;
+    uint32_t setValue    = 0;
+    uint16_t buf16       = 0;
+    uint8_t  buf8        = 0;
+    int      rc          = 0;
+
+    if (NULL == tokens             ||
+        0    == tokens->tokenCount ||
+        NULL == outputFile)
+    {
+        INTERNAL_ERROR;
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], ALIAS_STR))
+    {
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], RESERVE_STR))
+    {
+        if (2 != tokens->tokenCount)
+        {
+            printf("Error on line %u: reserve directive takes one argument\n", lineNumber);
+            return false;
+        }
+
+        if (false == parseLiteral(tokens->tokens[1], &reserveSize))
+        {
+            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        if (reserveSize != 0)
+        {
+            if (reserveSize > 1 &&
+                0 != fseek(outputFile, reserveSize - 1, SEEK_CUR))
+            {
+                printf("Error writing to \"%s\"\n", outputFileLocation);
+                return false;
+            }
+
+            if ('\0' != fputc('\0', outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileLocation);
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], SET_STR))
+    {
+        if (3 != tokens->tokenCount)
+        {
+            printf("Error on line %u: set directive takes two argument\n", lineNumber);
+            return false;
+        }
+
+        if (1   == strlen(tokens->tokens[1]) &&
+            '*' == tokens->tokens[1][0])
+        {
+            if (strlen(tokens->tokens[2]) + 1 !=  fwrite(tokens->tokens[2], sizeof(char), strlen(tokens->tokens[2]) + 1, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileLocation);
+                return false;
+            }
+            return true;
+        }
+
+        if (false == parseLiteral(tokens->tokens[1], &reserveSize))
+        {
+            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        if (false == parseLiteral(tokens->tokens[1], &setValue))
+        {
+            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[2]);
+            return false;
+        }
+
+        if (reserveSize != 1 &&
+            reserveSize != 2 &&
+            reserveSize != 4)
+        {
+            printf("Error on line %u: sets of numeric literals must be 1, 2, or 4 bytes\n", lineNumber);
+            return false;
+        }
+
+        if (setValue >= (0x100 << ((reserveSize - 1) * 8)))
+        {
+            printf("Error on line %u: %s cannot fit into %u bytes\n", lineNumber, tokens->tokens[2], reserveSize);
+            return false;
+        }
+
+        switch (reserveSize)
+        {
+            case 1:
+                buf8 = setValue & 0xFF;
+                rc = fwrite(&buf8, 1, 1, outputFile);
+                break;
+            case 2:
+                buf16 = setValue & 0xFFFF;
+                rc = fwrite(&buf16, 2, 1, outputFile);
+                break;
+            case 4:
+                rc = fwrite(&setValue, 4, 1, outputFile);
+                break;
+        }
+
+        if (1 != rc)
+        {
+            printf("Error writing to \"%s\"\n", outputFileLocation);
+            return false;
+        }
+
+        return true;
+    }
+
+    printf("Error on line %u: invalid directive \"%s\"\n", lineNumber, tokens->tokens[0]);
+    return false;
+}
+
+static bool parseMainInstructionSegment(tokens_t                *tokens, 
+                                        instructionDescriptor_t *descriptor,
+                                        bool                    *requiresArgAug,
+                                        uint32_t                 address,
+                                        uint32_t                 lineNumber,
+                                        FILE                    *outputFile)
+{
+    uint32_t outputBuf          = 0;
+    uint8_t  minimumRegselCount = 0;
+    bool     isAlternateForm    = false;
+    form_e   form               = 0;
+    char    *literalArgument    = NULL;
+    label_t *label              = NULL;
+    alias_t *alias              = NULL;
+    uint32_t literalValue       = 0;
+
+    if (NULL == tokens         ||
+        NULL == descriptor     ||
+        NULL == requiresArgAug ||
+        NULL == outputFile)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (tokens->tokenCount - 1 != formArgCount[descriptor->primaryForm])
+    {
+        if (tokens->tokenCount - 1 > formArgCount[descriptor->primaryForm])
+        {
+            printf("Error on line %u: too many arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+        }
+        else
+        {
+            printf("Error on line %u: too few arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+        }
+        return false;
+    }
+
+    if (true == descriptor->hasAlternateForm)
+    {
+        minimumRegselCount = formRegselCount[descriptor->alternateForm];
+    }
+    else
+    {
+        minimumRegselCount = formRegselCount[descriptor->primaryForm];
+    }
+
+    switch (minimumRegselCount)
+    {
+        case 3:
+            if (false == isValidRegsel(tokens->tokens[3]))
+            {
+                printf("Error on line %u: argument #3 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                return false;
+            }
+
+            outputBuf |= ((uint32_t) getRegsel(tokens->tokens[3])) << REGSEL_3_OFFSET;
+
+        case 2:
+            if (false == isValidRegsel(tokens->tokens[2]))
+            {
+                printf("Error on line %u: argument #2 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                return false;
+            }
+
+            outputBuf |= ((uint32_t) getRegsel(tokens->tokens[2])) << REGSEL_2_OFFSET;
+
+        case 1:
+            if (false == isValidRegsel(tokens->tokens[1]))
+            {
+                printf("Error on line %u: argument #1 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                return false;
+            }
+
+            outputBuf |= ((uint32_t) getRegsel(tokens->tokens[1])) << REGSEL_1_OFFSET;
+
+        default:
+            break;
+    }
+
+    if (true == descriptor->hasAlternateForm)
+    {
+        isAlternateForm = true;
+        switch (formRegselCount[descriptor->primaryForm])
+        {
+            case 3:
+                if (true == isValidRegsel(tokens->tokens[3]))
+                {
+                    outputBuf |= ((uint32_t) getRegsel(tokens->tokens[3])) << REGSEL_3_OFFSET;
+                    isAlternateForm = false;
+                }
+                break;
+            
+            case 2:
+                if (true == isValidRegsel(tokens->tokens[2]))
+                {
+                    outputBuf |= ((uint32_t) getRegsel(tokens->tokens[2])) << REGSEL_2_OFFSET;
+                    isAlternateForm = false;
+                }
+                break;
+
+            case 1:
+                if (true == isValidRegsel(tokens->tokens[1]))
+                {
+                    outputBuf |= ((uint32_t) getRegsel(tokens->tokens[1])) << REGSEL_1_OFFSET;
+                    isAlternateForm = false;
+                }
+                break;
+        }
+    }
+
+    if (isAlternateForm)
+    {
+        outputBuf      |= descriptor->opCodeAlternateVal << OP_CODE_OFFSET;
+        *requiresArgAug = descriptor->alternateFormUsesArgAugment;
+        form            = descriptor->alternateForm;
+    }
+    else
+    {
+        outputBuf      |= descriptor->opCodePrimaryVal << OP_CODE_OFFSET;
+        *requiresArgAug = false;
+        form            = descriptor->primaryForm;
+    }
+
+    if (formArgCount[form] != formRegselCount[form])
+    {
+        literalArgument = tokens->tokens[tokens->tokenCount - 1];
+
+        label = getLabel(&labelList, literalArgument);
+
+        if (NULL == label)
+        {
+            alias = getAlias(&aliasList, literalArgument);
+
+            if (NULL == alias)
+            {
+                if (false == parseLiteral(literalArgument, &literalValue))
+                {
+                    printf("Error on line %u: could not resolve argument \"%s\"\n", lineNumber, literalArgument);
                     return false;
                 }
 
-                tmpLabel->instruction = instruction;
-                tmpLabel->label       = label;
+            }
+            else
+            {
+                literalValue = alias->value;
+            }
+        }
+        else
+        {
+            literalValue = label->address - address;
+        }
+
+        if (literalValue > formMaxArgSize[form])
+        {
+            printf("Error on line %u: \"%s\" does not fit as an argument for \"%s\"\n",
+                   lineNumber, literalArgument, tokens->tokens[0]);
+            return false;
+        }
+
+        outputBuf |= literalValue;
+    }
+
+    if (1 != fwrite(&outputBuf, 4, 1, outputFile))
+    {
+        printf("Error writing to \"%s\"\n", outputFileLocation);
+        return false;
+    }
+
+    return true;
+}
+
+static bool parseArgumentAugment(tokens_t *tokens, uint32_t address, uint32_t lineNumber, FILE *outputFile)
+{
+    char    *literalArgument = NULL;
+    label_t *label           = 0;
+    alias_t *alias           = 0;
+    uint32_t literalValue    = 0;
+
+    literalArgument = tokens->tokens[tokens->tokenCount - 1];
+
+    label = getLabel(&labelList, literalArgument);
+
+    if (NULL == label)
+    {
+        alias = getAlias(&aliasList, literalArgument);
+
+        if (NULL == alias)
+        {
+            if (false == parseLiteral(literalArgument, &literalValue))
+            {
+                printf("Error on line %u: could not resolve argument \"%s\"\n", lineNumber, literalArgument);
+                return false;
             }
 
-            instruction->address = address;
-            
+        }
+        else
+        {
+            literalValue = alias->value;
+        }
+    }
+    else
+    {
+        literalValue = label->address - address;
+    }
+
+    if (1 != fwrite(&literalValue, 4, 1, outputFile))
+    {
+        printf("Error writing to \"%s\"\n", outputFileLocation);
+        return false;
+    }
+
+    return true;
+}
+
+static bool parseInstruction(tokens_t *tokens, uint32_t lineNumber, FILE *outputFile)
+{
+    instructionDescriptor_t *descriptorInstance = NULL;
+    uint32_t                 address            = 0;
+    bool                     requiresArgAugment = 0;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    for (uint16_t i = 0; i < sizeof(instructionDescriptors) / sizeof(instructionDescriptor_t); i++)
+    {
+        descriptorInstance = &(instructionDescriptors[i]);
+
+        if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr))
+        {
+            address = ftell(outputFile);
+
+            if (false == parseMainInstructionSegment(tokens,
+                                                     descriptorInstance, 
+                                                     &requiresArgAugment,
+                                                     address,
+                                                     lineNumber,
+                                                     outputFile))
+            {
+                return false;
+            }
+
+            if (descriptorInstance->hasInstructionAugment &&
+                1 != fwrite(&(descriptorInstance->instructionAugment), 1, 1, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileLocation);
+                return false;
+            }
+
+            if (requiresArgAugment &&
+                false == parseArgumentAugment(tokens, address, lineNumber, outputFile))
+            {
+                return false;
+            }
+
             return true;
         }
     }
 
-    printf("Error on line %u: Invalid instruction \"%s\"\n", instruction->lineNumber, tokens->tokens[0]);
+    printf("Error on line %u: unknown instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
 
     return false;
 }
 
-static bool parseInputFile()
+static bool firstPass()
 {
-    char           inputBuffer[2048]   = {0};
-    instruction_t *currentInstruction  = NULL;
-    instruction_t *previousInstruction = NULL;
-    tokens_t       tokens              = {0};
-    uint32_t       lineNumber          = 0;
-    char          *label               = NULL;
-    bool           labelFound          = false;
+    char     inputBuffer[2048] = {0};
+    uint32_t lineNumber        = 0;
+    uint32_t address           = 0;
+    int      rc                = 0;
+    tokens_t tokens            = {0};
 
-    // First pass
-    while (fgets(inputBuffer, sizeof(inputBuffer), inputFile))
+    while (fgets(inputBuffer, 2048, inputFile))
     {
         lineNumber++;
+
+        freeTokensContents(&tokens);
 
         if (false == parseTokens(inputBuffer, &tokens))
         {
             INTERNAL_ERROR;
-            freeInstructionListContents(&instructionList);
-            freeLabelListContents(&labelList);
             return false;
         }
 
@@ -923,205 +1214,129 @@ static bool parseInputFile()
             continue;
         }
 
-        if (tokens.tokens[0][0] == ':' )
+        if (':' == tokens.tokens[0][0])
         {
-            if (false == parseLabel(&(tokens.tokens[0][1]), &label, lineNumber))
+            // Is label
+            if (false == parseLabel(&tokens, lineNumber, address))
             {
-                return false;
-            }
-        }
-        else
-        {
-
-            currentInstruction = addNewInstruction(&instructionList);
-
-            if (NULL == currentInstruction)
-            {
-                INTERNAL_ERROR;
                 freeTokensContents(&tokens);
-                freeInstructionListContents(&instructionList);
-                freeLabelListContents(&labelList);
-                fclose(inputFile);
                 return false;
             }
-
-            currentInstruction->lineNumber = lineNumber;
-
-            if (false == parseInstruction(&tokens,
-                                          currentInstruction,
-                                          label,
-                                          previousInstruction == NULL ?
-                                              0 : previousInstruction->address + getInstructionSize(previousInstruction)))
-            {
-                if (NULL != label)
-                {
-                    free(label);
-                }
-                freeTokensContents(&tokens);
-                freeInstructionListContents(&instructionList);
-                freeLabelListContents(&labelList);
-                fclose(inputFile);
-                return false;
-            }
-
-            if (NULL != label)
-            {
-                label = NULL;
-            }
-
-            previousInstruction = currentInstruction;
-        }
-    }
-
-    freeTokensContents(&tokens);
-    fclose(inputFile);
-
-    if (NULL != label)
-    {
-        printf("Error on line %u: Dangling label at end of file\n", lineNumber);
-        free(label);
-        freeInstructionListContents(&instructionList);
-        freeLabelListContents(&labelList);
-        return false;
-    }
-
-    // Second pass
-    if (NULL == instructionList.first)
-    {
-        return true;
-    }
-
-    for (currentInstruction = instructionList.first; NULL != currentInstruction; currentInstruction = currentInstruction->next)
-    {
-        if (NULL == currentInstruction->targetLabel)
-        {
             continue;
         }
 
-        if (NULL != currentInstruction->targetLabel)
+        if ('.' == tokens.tokens[0][0])
         {
-            labelFound = false;
-            for (label_t *labelInstance = labelList.first; labelInstance != NULL; labelInstance = labelInstance->next)
+            // Is a dot directive
+            rc = parseDotDirectiveFirstPass(&tokens, lineNumber);
+            
+            if (-1 == rc)
             {
-                if (0 == strcmp(currentInstruction->targetLabel, labelInstance->label))
-                {
-                    labelFound = true;
-                    currentInstruction->targetLabel_p = labelInstance->instruction;
-                }
-            }
-
-            if (false == labelFound)
-            {
-                printf("Error on line %u: could not find label \"%s\"\n", currentInstruction->lineNumber, currentInstruction->targetLabel);
-                freeInstructionListContents(&instructionList);
-                freeLabelListContents(&labelList);
+                freeTokensContents(&tokens);
                 return false;
             }
+
+            address += rc;
+
+            continue;
         }
-    }
+
+        rc = getInstructionSize(&tokens, lineNumber);
+
+        if (-1 == rc)
+        {
+            // Error logged by getInstructionSize
+            freeTokensContents(&tokens);
+            return false;
+        }
+
+        address += rc;
+    }    
+
+    freeTokensContents(&tokens);
 
     return true;
 }
 
-static bool outputToFile()
+static bool secondPass()
 {
-    uint32_t address    = 0;
-    uint32_t buf32      = 0;
-    FILE    *outputFile = NULL;
+    FILE    *outputFile        = NULL;
+    char     inputBuffer[2048] = {0};
+    tokens_t tokens            = {0};
+    uint32_t lineNumber        = 0;
 
     outputFile = fopen(outputFileLocation, "wb");
 
     if (NULL == outputFile)
     {
-        printf("Could not open file \"%s\"\n", outputFileLocation);
-        freeInstructionListContents(&instructionList);
-        freeLabelListContents(&labelList);
+        printf("Could not write to output file \"%s\"\n", outputFileLocation);
         return false;
     }
 
-    for (instruction_t *i = instructionList.first; i != NULL; i = i->next)
+    rewind(inputFile);
+
+    while (fgets(inputBuffer, 2048, inputFile))
     {
-        // Preparing the main instruction
-        buf32 = 0;
-        buf32 += i->opCode << 24;
-        switch (i->regselCount)
-        {
-            case 3:
-                buf32 += i->regsel3 << REGSEL_3_OFFSET;
-            case 2:
-                buf32 += i->regsel2 << REGSEL_2_OFFSET;
-            case 1:
-                buf32 += i->regsel1 << REGSEL_1_OFFSET;
-        }
+        lineNumber++;
 
-        if (false == i->hasArgAugment)
-        {
-            buf32 += i->immediate;
-        }
+        freeTokensContents(&tokens);
 
-        // Seek if required
-        if (address != i->address &&
-            0 != fseek(outputFile, address, SEEK_SET))
+        if (false == parseTokens(inputBuffer, &tokens))
         {
             INTERNAL_ERROR;
-            freeInstructionListContents(&instructionList);
-            freeLabelListContents(&labelList);
             fclose(outputFile);
+            remove(outputFileLocation);
             return false;
         }
 
-        // Print main instruction
-        if (1 != fwrite(&buf32, sizeof(buf32), 1, outputFile))
+        if (0 == tokens.tokenCount)
         {
-            INTERNAL_ERROR;
-            freeInstructionListContents(&instructionList);
-            freeLabelListContents(&labelList);
+            continue;
+        }
+
+        if (':' == tokens.tokens[0][0])
+        {
+            // Is label
+            continue;
+        }
+
+        if ('.' == tokens.tokens[0][0])
+        {
+            // Is dot directive
+            if (false == parseDotDirectiveSecondPass(&tokens, lineNumber, outputFile))
+            {
+                fclose(outputFile);
+                remove(outputFileLocation);
+                freeTokensContents(&tokens);
+                return false;
+            }
+
+            continue;
+        }
+
+        if (false == parseInstruction(&tokens, lineNumber, outputFile))
+        {
             fclose(outputFile);
+            remove(outputFileLocation);
+            freeTokensContents(&tokens);
             return false;
-        }
-        address += 4;
-
-        // Print instruction augment
-        if (true == i->hasInstructionAugment)
-        {
-            if (1 != fwrite(&(i->instructionAugment), sizeof(uint8_t), 1, outputFile))
-            {
-                INTERNAL_ERROR;
-                freeInstructionListContents(&instructionList);
-                freeLabelListContents(&labelList);
-                fclose(outputFile);
-                return false;
-            }
-            address += 1;
-        }
-
-        // Print arg augment
-        if (true == i->hasArgAugment)
-        {
-            if (NULL == i->targetLabel_p)
-            {
-                buf32 = i->immediate;
-            }
-            else
-            {
-                buf32 = i->targetLabel_p->address - i->address;
-            }
-
-            if (1 != fwrite(&buf32, sizeof(buf32), 1, outputFile))
-            {
-                INTERNAL_ERROR;
-                freeInstructionListContents(&instructionList);
-                freeLabelListContents(&labelList);
-                fclose(outputFile);
-                return false;
-            }
-            address += 4;
         }
     }
 
     fclose(outputFile);
-
+    freeTokensContents(&tokens);
     return true;
+}
+
+static void teardown()
+{
+    freeLabelListContents(&labelList);
+
+    if (NULL != inputFile)
+    {
+        fclose(inputFile);
+        inputFile = NULL;
+    }
 }
 
 int main(int argc, char* argv[])
@@ -1133,18 +1348,14 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    if (false == parseInputFile())
+    if (false == firstPass() ||
+        false == secondPass())
     {
+        teardown();
         return -1;
     }
 
-    if (false == outputToFile())
-    {
-        return -1;
-    }
-
-    freeInstructionListContents(&instructionList);
-    freeLabelListContents(&labelList);
+    teardown();
 
     printf("Success!\n");
 

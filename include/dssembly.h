@@ -6,6 +6,9 @@
 
 #define MAX_TOKENS 8
 #define COMMENT_PREFIX "//"
+#define ALIAS_STR      ".alias"
+#define RESERVE_STR    ".reserve"
+#define SET_STR        ".set"
 #define OP_CODE_MAX_LEN 32
 
 #define OP_CODE_OFFSET 24
@@ -26,34 +29,11 @@ typedef enum
     form_7 = 6
 } form_e;
 
-typedef struct instruction_t
-{
-    uint8_t               opCode;
-    bool                  hasInstructionAugment;
-    uint8_t               instructionAugment;
-    uint8_t               regselCount;
-    uint8_t               regsel1;
-    uint8_t               regsel2;
-    uint8_t               regsel3;
-    bool                  hasArgAugment;
-    uint32_t              lineNumber;
-    uint32_t              address;
-    uint32_t              immediate;
-    char                 *targetLabel;
-    struct instruction_t *targetLabel_p;
-    struct instruction_t *next;
-} instruction_t;
-
-typedef struct
-{
-    instruction_t *first;
-    instruction_t *last;
-} instructionList_t;
 
 typedef struct label_t
 {
     char           *label;
-    instruction_t  *instruction;
+    uint32_t        address;
     struct label_t *next;
 } label_t;
 
@@ -62,6 +42,19 @@ typedef struct
     label_t *first;
     label_t *last;
 } labelList_t;
+
+typedef struct alias_t
+{
+    char           *alias;
+    uint32_t        value;
+    struct alias_t *next;
+} alias_t;
+
+typedef struct
+{
+    alias_t *first;
+    alias_t *last;
+} aliasList_t;
 
 typedef struct
 {
@@ -87,14 +80,16 @@ typedef struct
 } tokens_t;
 
 // Util functions
-instruction_t *addNewInstruction(instructionList_t *instructionList);
 
-void freeInstructionListContents(instructionList_t *instructionList);
+label_t *addNewLabel          (labelList_t *labelList);
+label_t *getLabel             (labelList_t *labelList, char *name);
+void     freeLabelListContents(labelList_t *labelList);
 
-label_t *addNewLabel(labelList_t *labelList);
-
-void freeLabelListContents(labelList_t *labelList);
+alias_t *addNewAlias          (aliasList_t *aliasList);
+alias_t *getAlias             (aliasList_t *aliasList, char *name);
+void     freeAliasListContents(aliasList_t *aliasList);
 
 void freeTokensContents(tokens_t *tokens);
+bool parseTokens       (char* inputBuffer, tokens_t *tokens);
 
-bool parseTokens(char* inputBuffer, tokens_t *tokens);
+bool isAlphanumericString(char *input);

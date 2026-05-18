@@ -16,22 +16,82 @@
 
 `FL`: Flags register - 8bit
 
+## Comments
+
+Comments are indicated with a preceding `//` and require a space seperation from any code preceding it on the same line (so `NOOP//does nothing` is not allowed).
+
 ## Literals
 
 Literals can be specified as hexadecimal with `0x`, binary with `0b`, or decimal with no prefix.
 
-## Labels
+```
+    MOVE G0 123
+    MOVE G1 0b1001
+    MOVE G2 0x80FE
+```
 
-Labels are created with a preceding `:` and are referenced simply by name. For example:
+## Directives
+
+### Label
+
+Labels are a portable way to reffer to certain parts of code. They can only be used with instructions which interact with memory in the relative addressing mode. They are defined with a preceding `:` as such:
 
 ```
 :myLabel
     BRAL myLabel
 ```
 
-## Comments
+### Alias
 
-Comments are indicated with a preceding `//` and require a space seperation from any code preceding it on the same line (so `NOOP//does nothing` is not allowed).
+Aliases are text representation of numbers. They are defined with the `.alias` directive as such:
+
+```
+.alias myVariable 0x9000
+
+    LOAD-ABS G0 myVariable
+
+    // Is the same as:
+    LOAD-ABS G0 0x9000
+```
+
+### Reserve
+
+Reservations will leave a certain number of bytes as empty space between instructions. They are defined with the `.reserve` directive as such:
+
+```
+:aVariable
+    .reserve 4
+
+    STOR G0 aVariable
+```
+
+### Set
+
+Sets are similar to reservations, but they also initialize the memory to a given value. They are restricted to a size of 1, 2, and 4 bytes when setting numeric literals. They are defined with the `.set` directive as such:
+
+```
+:anotherVariable
+    .set 4 0x00008000
+
+    LOAD G0 anotherVariable
+```
+
+Sets can also be used to store null-terminated strings as such:
+
+```
+:programName
+    .set * "Hello, world!"
+
+    GETABS       OA programName
+    MOVE         G1 0
+:printProgramName
+    LOAD-W1S0-OA G0 G1
+    COMP         G0 0
+    BREQ         done
+    BRAL-P       print
+    ADD          G1 G1 1
+    BRAL         printProgramName
+```
 
 ## Instructions
 
@@ -98,7 +158,7 @@ BSRC
 COMP src1 src2
 // Compares two values to each other. This will subtract `src2` from `src1` and
 // update the flags register without saving the result. `src1` is a register
-// while `src1` can be a register or an immediate value.
+// while `src2` can be a register or an immediate value.
 
 BR<condition>-<pushReturn>-<addressingMode> address
 // Branches execution to another place in memory. `address` is the location to
@@ -240,26 +300,69 @@ W1S3 - Selects a 1 byte word with a 3 byte shift:
 Note that using a word size larger than the register it is bound for may result in undesired behaviour. For example, when doing a `LOAD` into `SP` with no specified word geometry, the processor will try to fit 32 bits into a 16 bit register. Therefore, a W2S* or W1S* word geometry must be used.
 
 ## Example Code
-Checks to see if a byte in memory is 7 or lower. If it is, terminate. If it's not, shift it to the left by how much higher it was than 7, store it in memory, jump to some specific location in absolute memory space, and return.
+
+This code will scan for certain devices and store their device data addresses for later use
 
 ```
-// Load a single byte into G0 using the OC register as offset
-    LOAD-W1S0-OC  G0 0x1000
+.alias derialAddress          0x8000
+.alias dardriveManagerAddress 0x8004
+.alias dardriveDriveAddress   0x8008
 
-// Check if its 7 or lower
-    COMP          G0 7
-    BRLS          finish
+.alias peripheralDeviceCode 0x05
+.alias storageDeviceCode    0x02
+.alias deviceRegistryEOT    0xFF
 
-// Not 7
-    AND           G0 G0 0x000000FF
-    SUB           G1 G0 7
-    BSLC          G0 G0 G1
-    STOR-OC       G0 0x1004
+.alias serialTypeID     0x53
+.alias derialProtocolID 0x01
 
-// Some important system call
-    BRAL-ABS      0x90FE
+.alias dardriveManagerSPI 0x01
+.alias dardriveDriveSPI   0x02
 
-:finish
-    TERM
+// Scan for some devices
+    MOVE          OA 0x5FF8
+:scanTop
+    ADD           OA OA 8
+    COMP          OA 0x6100
+    BREQ          doneScan
+    LOAD-W1S0-OA  G0 1
+    COMP          G0 peripheralDeviceCode
+    BREQ          isPeripheral
+    COMP          G0 peripheralDeviceCode
+    BREQ          isStorage
+    COMP          G0 deviceRegistryEOT
+    BREQ          doneScan
+    BRAL          scanTop
 
+
+:isPeripheral
+    LOAD-OA       OB 4
+    LOAD-W1S0-OB  G0 0
+    COMP          G0 serialTypeID
+    BRNE          scanTop
+    // is serial port
+    LOAD-W1S0-OB  G0 1
+    COMP          G0 derialProtocolID
+    BRNE          scanTop
+    // is derial
+    STOR-ABS      OB derialAddress
+    BRAL          scanTop
+
+:isStorage
+    LOAD-OA       OB 4
+    LOAD-W1S0-OB  G0 0
+    COMP          G0 dardriveManagerSPI
+    BREQ          isDardriveManager
+    COMP          G0 dardriveDriveSPI
+    BRNE          scanTop
+    // is dardrive drive
+    STOR-ABS      OB dardriveDriveAddress
+    BRAL          scanTop
+
+:isDardriveManager
+    STOR-ABS      OB dardriveManagerAddress
+    BRAL          scanTop
+
+:doneScan
+    NOOP
+    // Continue on to do something else
 ```
