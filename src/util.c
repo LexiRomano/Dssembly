@@ -213,6 +213,7 @@ bool parseTokens(char* inputBuffer, tokens_t *tokens)
     uint16_t startIndex   = 0;
     uint16_t currentIndex = 0;
     uint8_t  numTokens    = 0;
+    bool     isInQuote    = false;
 
     if (NULL == tokens ||
         NULL == inputBuffer)
@@ -245,21 +246,38 @@ bool parseTokens(char* inputBuffer, tokens_t *tokens)
         }
         else
         {
-            if ((' ' == current ||
+            if (((isInQuote ? false : ' ' == current) ||
+                 '"' == current ||
                 '\0' == current ||
                 '\n' == current) &&
-                ' '  != last)
+                (' ' != last))
             {
                 // Found the end of a token.
                 tokens->tokens[numTokens] = calloc(currentIndex - startIndex + 1, sizeof(char));
                 snprintf(tokens->tokens[numTokens], currentIndex - startIndex + 1, "%s", &(inputBuffer[startIndex]));
                 numTokens++;
+
+                if (isInQuote)
+                {
+                    // Bump it along one more so we don't pick up another quote
+                    last = current;
+                    current = inputBuffer[++currentIndex];
+                    isInQuote = false;
+                }
             }
-            else if (' ' != current &&
+            else if ((isInQuote ? false : ' ' != current) &&
                      ' ' == last)
             {
                 // Found the beginning of a token.
-                startIndex = currentIndex;
+                if ('"' == current)
+                {
+                    isInQuote = true;
+                    startIndex = currentIndex + 1;
+                }
+                else
+                {
+                    startIndex = currentIndex;
+                }
             }
         }
 

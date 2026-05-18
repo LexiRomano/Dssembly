@@ -755,13 +755,13 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
         if (2 != tokens->tokenCount)
         {
             printf("Error on line %u: reserve directive takes one argument\n", lineNumber);
-            return false;
+            return -1;
         }
 
         if (false == parseLiteral(tokens->tokens[1], &buf32))
         {
             printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
-            return false;
+            return -1;
         }
 
         return buf32;
@@ -772,7 +772,7 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
         if (3 != tokens->tokenCount)
         {
             printf("Error on line %u: set directive takes two argument\n", lineNumber);
-            return false;
+            return -1;
         }
 
         if (1   == strlen(tokens->tokens[1]) &&
@@ -784,7 +784,7 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
         if (false == parseLiteral(tokens->tokens[1], &buf32))
         {
             printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
-            return false;
+            return -1;
         }
 
         return buf32;
