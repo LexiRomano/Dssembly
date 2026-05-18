@@ -873,7 +873,7 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
             return false;
         }
 
-        if (false == parseLiteral(tokens->tokens[1], &setValue))
+        if (false == parseLiteral(tokens->tokens[2], &setValue))
         {
             printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[2]);
             return false;
@@ -887,7 +887,7 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
             return false;
         }
 
-        if (setValue >= (0x100 << ((reserveSize - 1) * 8)))
+        if (setValue >= (((uint64_t) 0x100) << ((reserveSize - 1) * 8)))
         {
             printf("Error on line %u: %s cannot fit into %u bytes\n", lineNumber, tokens->tokens[2], reserveSize);
             return false;
