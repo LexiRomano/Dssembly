@@ -730,9 +730,52 @@ static bool parseAlias(tokens_t *tokens, uint32_t lineNumber)
     return true;
 }
 
+static char *parseEscapeCharacters(const char *inputString)
+{
+    char     buf[2048]   = {0};
+    uint16_t inputIndex  = 0;
+    uint16_t outputIndex = 0;
+    bool     inEscape    = false;
+
+    while ('\0' != inputString[inputIndex])
+    {
+        if (inEscape)
+        {
+            switch (inputString[inputIndex])
+            {
+                case 'n':
+                    buf[outputIndex++] = '\n';
+                    break;
+                case 'r':
+                    buf[outputIndex++] = '\r';
+                    break;
+                default:
+                    buf[outputIndex++] = inputString[inputIndex];
+                    break;
+            }
+            inEscape = false;
+        }
+        else if ('\\' == inputString[inputIndex])
+        {
+            inEscape = true;
+        }
+        else
+        {
+            buf[outputIndex++] = inputString[inputIndex];
+        }
+
+        inputIndex++;
+    }
+
+    buf[outputIndex] = '\0';
+
+    return strcpy(calloc(strlen(buf) + 1, sizeof(char)), buf);
+}
+
 static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
 {
-    uint32_t buf32 = 0;
+    uint32_t buf32           = 0;
+    char    *parsedSetString = NULL;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -778,7 +821,10 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
         if (1   == strlen(tokens->tokens[1]) &&
             '*' == tokens->tokens[1][0])
         {
-            return strlen(tokens->tokens[2]) + 1;
+            parsedSetString = parseEscapeCharacters(tokens->tokens[2]);
+            buf32 = strlen(parsedSetString) + 1;
+            free(parsedSetString);
+            return buf32;
         }
 
         if (false == parseLiteral(tokens->tokens[1], &buf32))
@@ -796,11 +842,12 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
 
 static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, FILE *outputFile)
 {
-    uint32_t reserveSize = 0;
-    uint32_t setValue    = 0;
-    uint16_t buf16       = 0;
-    uint8_t  buf8        = 0;
-    int      rc          = 0;
+    uint32_t reserveSize     = 0;
+    uint32_t setValue        = 0;
+    uint16_t buf16           = 0;
+    uint8_t  buf8            = 0;
+    int      rc              = 0;
+    char    *parsedSetString = NULL;
 
     if (NULL == tokens             ||
         0    == tokens->tokenCount ||
@@ -859,11 +906,14 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
         if (1   == strlen(tokens->tokens[1]) &&
             '*' == tokens->tokens[1][0])
         {
-            if (strlen(tokens->tokens[2]) + 1 !=  fwrite(tokens->tokens[2], sizeof(char), strlen(tokens->tokens[2]) + 1, outputFile))
+            parsedSetString = parseEscapeCharacters(tokens->tokens[2]);
+            if (strlen(parsedSetString) + 1 !=  fwrite(parsedSetString, sizeof(char), strlen(parsedSetString) + 1, outputFile))
             {
                 printf("Error writing to \"%s\"\n", outputFileLocation);
+                free(parsedSetString);
                 return false;
             }
+            free(parsedSetString);
             return true;
         }
 

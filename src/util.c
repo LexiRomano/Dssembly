@@ -250,7 +250,7 @@ bool parseTokens(char* inputBuffer, tokens_t *tokens)
                  '"' == current ||
                 '\0' == current ||
                 '\n' == current) &&
-                (' ' != last))
+                (isInQuote ? true : ' ' != last))
             {
                 // Found the end of a token.
                 tokens->tokens[numTokens] = calloc(currentIndex - startIndex + 1, sizeof(char));
@@ -288,7 +288,16 @@ bool parseTokens(char* inputBuffer, tokens_t *tokens)
         }
 
         last = current;
-        current = inputBuffer[++currentIndex];
+        if (last == '\\')
+        {
+            // Make sure we don't interpret a space or quote
+            current = 'z';
+            currentIndex++;
+        }
+        else
+        {
+            current = inputBuffer[++currentIndex];
+        }
     }
 
     tokens->tokenCount = numTokens;
