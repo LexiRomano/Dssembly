@@ -93,6 +93,44 @@ Sets can also be used to store null-terminated strings as such:
     BRAL         printProgramName
 ```
 
+### Section
+
+The section directive declares all following instructions and labels to be part of a section. It is required when assembling in linked mode but ignored when assembling in raw mode, in which case it is ignored. Sections are defined with the `.section` directive as such:
+
+```
+.section start
+    :reset
+    MOVE     0x1000 OA
+    BRAL-OA  0
+```
+
+Multiple sections may be defined in one dssembly file, but labels may not be shared between those sections without usage of the next two directives:
+
+### Export and Requires
+
+The export directive allows labels from a given section to be used in other sections. The requires directive allows the usage of an exported label form another section. These directives are defined with the `.export` and `.requires` directives as such:
+
+```
+.section code
+
+.requires helloWorld
+.requires print
+    
+    GETABS G0 helloWorld
+    BRAL-P print
+    TERM
+
+
+.section text
+
+.export helloWorld
+
+:helloWorld
+    .set * "Hello, world!"
+```
+
+These directives are optional when assembling in likned mode and are ignored when assembling in raw mode.
+
 ## Instructions
 
 ```
