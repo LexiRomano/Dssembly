@@ -1,12 +1,18 @@
 #include "dssembly.h"
 
-FILE *inputFile      = NULL;
-char *inputFileName  = NULL;
-FILE *outputFile     = NULL;
-char *outputFileName = NULL;
+static FILE *inputFile      = NULL;
+static char *inputFileName  = NULL;
+static FILE *outputFile     = NULL;
+static char *outputFileName = NULL;
 
-static labelList_t labelList = {0};
-static aliasList_t aliasList = {0};
+static bool link = false;
+
+static sectionList_t        sectionList           = {0};
+static section_t           *currentSection        = NULL;
+static labelList_t         *currentLabelList      = NULL;
+static labelList_t         *currentExportedLabels = NULL;
+static requiredLabelList_t *currentRequiredLabels = NULL;
+static aliasList_t          aliasList             = {0};
 
 static instructionDescriptor_t instructionDescriptors[] =
 {// instructionStr 
@@ -616,6 +622,12 @@ static bool parseLabel(tokens_t *tokens, uint32_t lineNumber, uint32_t address)
 
     labelWithoutColon = &(tokens->tokens[0][1]);
 
+    if (NULL == currentSection)
+    {
+        printf("%s:%u label \"%s\" not in a section\n", inputFileName, lineNumber, labelWithoutColon);
+        return false;
+    }
+
     if (true == isValidRegsel(labelWithoutColon))
     {
         printf("%s:%u: Label name cannot be a regsel\n", inputFileName, lineNumber);
@@ -628,7 +640,7 @@ static bool parseLabel(tokens_t *tokens, uint32_t lineNumber, uint32_t address)
         return false;
     }
 
-    if (NULL != getLabel(&labelList, labelWithoutColon))
+    if (NULL != getLabel(currentLabelList, labelWithoutColon))
     {
         printf("%s:%u: label \"%s\" already exists\n", inputFileName, lineNumber, labelWithoutColon);
         return false;
@@ -640,7 +652,7 @@ static bool parseLabel(tokens_t *tokens, uint32_t lineNumber, uint32_t address)
         return false;
     }
 
-    newLabel = addNewLabel(&labelList);
+    newLabel = addNewLabel(currentLabelList);
 
     if (NULL == newLabel)
     {
@@ -677,7 +689,7 @@ static bool parseAlias(tokens_t *tokens, uint32_t lineNumber)
         return false;
     }
 
-    if (NULL != getLabel(&labelList, tokens->tokens[1]))
+    if (NULL != getLabel(currentLabelList, tokens->tokens[1]))
     {
         printf("%s:%u: alias \"%s\" conflicts with label of the same name\n", inputFileName, lineNumber, tokens->tokens[1]);
         return false;
@@ -745,7 +757,7 @@ static char *parseEscapeCharacters(const char *inputString)
     return strcpy(calloc(strlen(buf) + 1, sizeof(char)), buf);
 }
 
-static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
+static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, uint32_t *address)
 {
     uint32_t buf32           = 0;
     char    *parsedSetString = NULL;
@@ -754,16 +766,16 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
         0    == tokens->tokenCount)
     {
         INTERNAL_ERROR;
-        return -1;
+        return false;
     }
 
     if (0 == strcmp(tokens->tokens[0], ALIAS_STR))
     {
         if (false == parseAlias(tokens, lineNumber))
         {
-            return -1;
+            return false;
         }
-        return 0;
+        return true;
     }
 
     if (0 == strcmp(tokens->tokens[0], RESERVE_STR))
@@ -771,16 +783,23 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
         if (2 != tokens->tokenCount)
         {
             printf("%s:%u: reserve directive takes one argument\n", inputFileName, lineNumber);
-            return -1;
+            return false;
         }
 
         if (false == parseLiteral(tokens->tokens[1], &buf32))
         {
             printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
-            return -1;
+            return false;
         }
 
-        return buf32;
+        if (NULL == currentSection)
+        {
+            printf("%s:%u: reserve directive not in section\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        *address += buf32;
+        return true;
     }
 
     if (0 == strcmp(tokens->tokens[0], SET_STR))
@@ -788,32 +807,199 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
         if (3 != tokens->tokenCount)
         {
             printf("%s:%u: set directive takes two argument\n", inputFileName, lineNumber);
-            return -1;
+            return false;
         }
 
         if (1   == strlen(tokens->tokens[1]) &&
             '*' == tokens->tokens[1][0])
         {
+            if (NULL == currentSection)
+            {
+                printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
+                return false;
+            }
+
             parsedSetString = parseEscapeCharacters(tokens->tokens[2]);
             buf32 = strlen(parsedSetString) + 1;
             free(parsedSetString);
-            return buf32;
+            *address += buf32;
+            return true;
         }
 
         if (false == parseLiteral(tokens->tokens[1], &buf32))
         {
             printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
-            return -1;
+            return false;
         }
 
-        return buf32;
+        if (NULL == currentSection)
+        {
+            printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        *address += buf32;
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], SECTION_STR))
+    {
+        if (false == link)
+        {
+            return true;
+        }
+
+        if (2 != tokens->tokenCount)
+        {
+            printf("%s:%u: section directive takes one argument\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (NULL != getSection(&sectionList, tokens->tokens[1]))
+        {
+            printf("%s:%u: duplicate section name \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        currentSection = addNewSection(&sectionList);
+
+        currentSection->name = strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)),
+                                      tokens->tokens[1]);
+        *address = 0;
+
+        currentLabelList = &(currentSection->labelList);
+        currentExportedLabels = &(currentSection->exportedLabels);
+        currentRequiredLabels = &(currentSection->requiredLabels);
+
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], EXPORT_STR))
+    {
+        if (false == link)
+        {
+            return true;
+        }
+
+        if (2 != tokens->tokenCount)
+        {
+            printf("%s:%u: export directive takes one argument\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (NULL == currentSection)
+        {
+            printf("%s:%u: export directive not in section\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (NULL != getLabel(currentExportedLabels, tokens->tokens[1]))
+        {
+            printf("%s:%u: label \"%s\" exported twice\n", inputFileName, lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        addNewLabel(currentExportedLabels)->label =
+                strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)), tokens->tokens[1]);
+
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], REQUIRES_STR))
+    {
+        if (false == link)
+        {
+            return true;
+        }
+
+        if (2 != tokens->tokenCount)
+        {
+            printf("%s:%u: requires directive takes one argument\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (NULL == currentSection)
+        {
+            printf("%s:%u: requires directive not in section\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (NULL != getRequiredLabel(currentRequiredLabels, tokens->tokens[1]))
+        {
+            printf("%s:%u: label \"%s\" required twice\n", inputFileName, lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        addNewRequiredLabel(currentRequiredLabels)->name = 
+                strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)), tokens->tokens[1]);
+
+        return true;
     }
 
     printf("%s:%u: invalid directive \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
-    return -1;
+    return false;
 }
 
-static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, FILE *outputFile)
+static bool completeSection()
+{
+    char nullChar = '\0';
+
+    currentSection->exportedLabelsOffset = ftell(outputFile);
+
+    for (label_t *tmpExport = currentExportedLabels->first;
+         NULL != tmpExport;
+         tmpExport = tmpExport->next)
+    {
+        if (1 != fwrite(tmpExport->label, strlen(tmpExport->label) + 1, 1, outputFile) ||
+            1 != fwrite(&(tmpExport->address), 4, 1, outputFile))
+        {
+            printf("Error writing to \"%s\"\n", outputFileName);
+            return false;
+        }
+    }
+
+    if (1 != fwrite(&nullChar, 1, 1, outputFile))
+    {
+        printf("Error writing to \"%s\"\n", outputFileName);
+        return false;
+    }
+
+    currentSection->requiredLabelsOffset = ftell(outputFile);
+
+    for (requiredLabel_t *tmpReq = currentRequiredLabels->first;
+         NULL != tmpReq;
+         tmpReq = tmpReq->next)
+    {
+        if (1 != fwrite(tmpReq->name, strlen(tmpReq->name) + 1, 1, outputFile) ||
+            1 != fwrite(&(tmpReq->instances.count), 2, 1, outputFile))
+        {
+            printf("Error writing to \"%s\"\n", outputFileName);
+            return false;
+        }
+
+        for (resolutionInstance_t *tmpInstance = tmpReq->instances.first;
+             NULL != tmpInstance;
+             tmpInstance = tmpInstance->next)
+        {
+            if (1 != fwrite(&(tmpInstance->instructionOffset), 4, 1, outputFile) ||
+                1 != fwrite(&(tmpInstance->injectionOffset),   1, 1, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileName);
+                return false;
+            }
+        }
+    }
+
+    if (1 != fwrite(&nullChar, 1, 1, outputFile))
+    {
+        printf("Error writing to \"%s\"\n", outputFileName);
+        return false;
+    }
+
+    return true;
+}
+
+static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uint32_t lineNumber)
 {
     uint32_t reserveSize     = 0;
     uint32_t setValue        = 0;
@@ -821,10 +1007,11 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
     uint8_t  buf8            = 0;
     int      rc              = 0;
     char    *parsedSetString = NULL;
+    label_t *tmpLabel        = NULL;
+    label_t *tmpExport       = NULL;
 
-    if (NULL == tokens             ||
-        0    == tokens->tokenCount ||
-        NULL == outputFile)
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
     {
         INTERNAL_ERROR;
         return true;
@@ -864,6 +1051,8 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
                 return false;
             }
         }
+
+        *address += reserveSize;
         
         return true;
     }
@@ -937,6 +1126,84 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
             return false;
         }
 
+        *address += reserveSize;
+
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], SECTION_STR))
+    {
+        if (false == link)
+        {
+            return true;
+        }
+
+        if (2 != tokens->tokenCount)
+        {
+            printf("%s:%u: section directive takes one argument\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (NULL != currentSection &&
+            false == completeSection(outputFile))
+        {
+            return false;
+        }
+
+        currentSection = getSection(&sectionList, tokens->tokens[1]);
+
+        if (NULL == currentSection)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        currentSection->codeSegmentOffset = ftell(outputFile);
+
+        *address = 0;
+        currentLabelList = &(currentSection->labelList);
+        currentExportedLabels = &(currentSection->exportedLabels);
+        currentRequiredLabels = &(currentSection->requiredLabels);
+
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], EXPORT_STR))
+    {
+        if (false == link)
+        {
+            return true;
+        }
+
+        if (2 != tokens->tokenCount)
+        {
+            printf("%s:%u: export directive takes one argument\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        tmpExport = getLabel(currentExportedLabels, tokens->tokens[1]);
+
+        if (NULL == tmpExport)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        tmpLabel = getLabel(currentLabelList, tokens->tokens[1]);
+
+        if (NULL == tmpLabel)
+        {
+            printf("%s:%u: label \"%s\" does not exist\n", inputFileName, lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        tmpExport->address = tmpLabel->address;
+
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], REQUIRES_STR))
+    {
         return true;
     }
 
@@ -948,8 +1215,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
                                         instructionDescriptor_t *descriptor,
                                         bool                    *requiresArgAug,
                                         uint32_t                 address,
-                                        uint32_t                 lineNumber,
-                                        FILE                    *outputFile)
+                                        uint32_t                 lineNumber)
 {
     uint32_t outputBuf          = 0;
     uint8_t  minimumRegselCount = 0;
@@ -962,8 +1228,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
 
     if (NULL == tokens         ||
         NULL == descriptor     ||
-        NULL == requiresArgAug ||
-        NULL == outputFile)
+        NULL == requiresArgAug)
     {
         INTERNAL_ERROR;
         return false;
@@ -1072,7 +1337,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
     {
         literalArgument = tokens->tokens[tokens->tokenCount - 1];
 
-        label = getLabel(&labelList, literalArgument);
+        label = getLabel(currentLabelList, literalArgument);
 
         if (NULL == label)
         {
@@ -1123,17 +1388,18 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
 static bool parseArgumentAugment(tokens_t                *tokens,
                                  uint32_t                 address,
                                  instructionDescriptor_t *descriptor,
-                                 uint32_t                 lineNumber,
-                                 FILE                    *outputFile)
+                                 uint32_t                 lineNumber)
 {
-    char    *literalArgument = NULL;
-    label_t *label           = 0;
-    alias_t *alias           = 0;
-    uint32_t literalValue    = 0;
+    char                 *literalArgument    = NULL;
+    label_t              *label              = 0;
+    alias_t              *alias              = 0;
+    requiredLabel_t      *requiredLabel      = NULL;
+    resolutionInstance_t *resolutionInstance = NULL;
+    uint32_t              literalValue       = 0;
 
     literalArgument = tokens->tokens[tokens->tokenCount - 1];
 
-    label = getLabel(&labelList, literalArgument);
+    label = getLabel(currentLabelList, literalArgument);
 
     if (NULL == label)
     {
@@ -1143,8 +1409,26 @@ static bool parseArgumentAugment(tokens_t                *tokens,
         {
             if (false == parseLiteral(literalArgument, &literalValue))
             {
-                printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
-                return false;
+                if (false == link)
+                {
+                    printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
+                    return false;
+                }
+                
+                requiredLabel = getRequiredLabel(currentRequiredLabels, literalArgument);
+
+                if (NULL == requiredLabel)
+                {
+                    printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
+                    return false;
+                }
+
+                resolutionInstance = addNewResolutionInstance(&(requiredLabel->instances));
+
+                resolutionInstance->instructionOffset = address;
+
+                resolutionInstance->injectionOffset =
+                        descriptor->hasInstructionAugment ? 5 : 4;
             }
 
         }
@@ -1172,11 +1456,10 @@ static bool parseArgumentAugment(tokens_t                *tokens,
     return true;
 }
 
-static bool parseInstruction(tokens_t *tokens, uint32_t lineNumber, FILE *outputFile)
+static bool parseInstruction(tokens_t *tokens, uint32_t *address, uint32_t lineNumber)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
-    uint32_t                 address            = 0;
-    bool                     requiresArgAugment = 0;
+    bool                     requiresArgAugment = false;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -1191,14 +1474,11 @@ static bool parseInstruction(tokens_t *tokens, uint32_t lineNumber, FILE *output
 
         if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr))
         {
-            address = ftell(outputFile);
-
             if (false == parseMainInstructionSegment(tokens,
                                                      descriptorInstance, 
                                                      &requiresArgAugment,
-                                                     address,
-                                                     lineNumber,
-                                                     outputFile))
+                                                     *address,
+                                                     lineNumber))
             {
                 return false;
             }
@@ -1212,12 +1492,23 @@ static bool parseInstruction(tokens_t *tokens, uint32_t lineNumber, FILE *output
 
             if (requiresArgAugment &&
                 false == parseArgumentAugment(tokens,
-                                              address,
+                                              *address,
                                               descriptorInstance,
-                                              lineNumber,
-                                              outputFile))
+                                              lineNumber))
             {
                 return false;
+            }
+
+            *address += 4;
+            
+            if (descriptorInstance->hasInstructionAugment)
+            {
+                *address += 1;
+            }
+
+            if (requiresArgAugment)
+            {
+                *address += 4;
             }
 
             return true;
@@ -1236,6 +1527,15 @@ static bool firstPass()
     uint32_t address           = 0;
     int      rc                = 0;
     tokens_t tokens            = {0};
+
+    if (false == link)
+    {
+        currentSection = addNewSection(&sectionList);
+
+        currentLabelList      = &(currentSection->labelList);
+        currentExportedLabels = &(currentSection->exportedLabels);
+        currentRequiredLabels = &(currentSection->requiredLabels);
+    }
 
     while (fgets(inputBuffer, 2048, inputFile))
     {
@@ -1268,17 +1568,19 @@ static bool firstPass()
         if ('.' == tokens.tokens[0][0])
         {
             // Is a dot directive
-            rc = parseDotDirectiveFirstPass(&tokens, lineNumber);
-            
-            if (-1 == rc)
+            if (false == parseDotDirectiveFirstPass(&tokens, lineNumber, &address))
             {
                 freeTokensContents(&tokens);
                 return false;
             }
 
-            address += rc;
-
             continue;
+        }
+
+        if (NULL == currentSection)
+        {
+            printf("%s:%u instruction not in section\n", inputFileName, lineNumber);
+            return false;
         }
 
         rc = getInstructionSize(&tokens, lineNumber);
@@ -1303,6 +1605,48 @@ static bool secondPass()
     char     inputBuffer[2048] = {0};
     tokens_t tokens            = {0};
     uint32_t lineNumber        = 0;
+    uint32_t address           = 0;
+
+    if (link)
+    {
+        if (NULL == currentSection)
+        {
+            // empty file
+            return true;
+        }
+
+        currentSection = sectionList.first;
+
+        for (currentSection = sectionList.first;
+             NULL != currentSection;
+             currentSection = currentSection->next)
+        {
+            if (1 != fwrite(currentSection->name,
+                            strlen(currentSection->name) + 1,
+                            1,
+                            outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileName);
+                return false;
+            }
+
+            // Reserve space for pointers
+            if (3 != fwrite(inputBuffer, 4, 3, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileName);
+                return false;
+            }
+        }
+
+        inputBuffer[0] = '\0';
+        if (1 != fwrite(inputBuffer, 1, 1, outputFile))
+        {
+            printf("Error writing to \"%s\"\n", outputFileName);
+            return false;
+        }
+
+        currentSection = NULL;
+    }
 
     rewind(inputFile);
 
@@ -1332,7 +1676,7 @@ static bool secondPass()
         if ('.' == tokens.tokens[0][0])
         {
             // Is dot directive
-            if (false == parseDotDirectiveSecondPass(&tokens, lineNumber, outputFile))
+            if (false == parseDotDirectiveSecondPass(&tokens, &address, lineNumber))
             {
                 freeTokensContents(&tokens);
                 return false;
@@ -1341,10 +1685,31 @@ static bool secondPass()
             continue;
         }
 
-        if (false == parseInstruction(&tokens, lineNumber, outputFile))
+        if (false == parseInstruction(&tokens, &address, lineNumber))
         {
             freeTokensContents(&tokens);
             return false;
+        }
+    }
+
+    if (link)
+    {
+        completeSection();
+
+        rewind(outputFile);
+
+        for (currentSection = sectionList.first;
+             NULL != currentSection;
+             currentSection = currentSection->next)
+        {
+            if (0 != fseek(outputFile, strlen(currentSection->name) + 1, SEEK_CUR) ||
+                1 != fwrite(&(currentSection->codeSegmentOffset),    4, 1, outputFile) ||
+                1 != fwrite(&(currentSection->exportedLabelsOffset), 4, 1, outputFile) ||
+                1 != fwrite(&(currentSection->requiredLabelsOffset), 4, 1, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileName);
+                return false;
+            }
         }
     }
 
@@ -1354,7 +1719,7 @@ static bool secondPass()
 
 static void teardown()
 {
-    freeLabelListContents(&labelList);
+    freeSectionListContents(&sectionList);
     freeAliasListContents(&aliasList);
 }
 
@@ -1367,11 +1732,7 @@ bool dssembler(char *in, char *out, bool linkedMode)
         return false;
     }
 
-    if (linkedMode)
-    {
-        printf("Linked mode currently unsupported\n");
-        return false;
-    }
+    link = linkedMode;
 
     inputFileName  = in;
     outputFileName = out;

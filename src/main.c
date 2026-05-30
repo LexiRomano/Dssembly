@@ -68,8 +68,6 @@ static void removeTmpDirectory()
 
         snprintf(nameBuf, 512, "%s/%s", TEMP_DIR_NAME, file->d_name);
 
-        printf("%s\n", nameBuf);
-
         remove(nameBuf);
     }
 
@@ -375,7 +373,9 @@ static bool parseConfigFile(dinkerConfig_t **config)
 
 int main(int argc, char *argv[])
 {
-    dinkerConfig_t *config = NULL;
+    dinkerConfig_t *config  = NULL;
+    bool            success = false;
+
     if (false == parseArgs(argc, argv))
     {
         return -1;
@@ -400,7 +400,27 @@ int main(int argc, char *argv[])
 
     if (false == createTmpDirectory())
     {
-        printf("Uh oh\n");
+        printf("Failed to create temporary directories\n");
+        freeDinkerConfigContents(config);
+        free(config);
+        return -1;
+    }
+
+    success = true;
+    for (uint8_t i = 0; i < config->inputFileCount; i++)
+    {
+        success &= dssembler(config->inputFiles[i]->sourceName,
+                             config->inputFiles[i]->objectName,
+                             true);
+    }
+
+    if (false == success)
+    {
+        if (false == argKeep)
+        {
+            removeTmpDirectory();
+        }
+
         freeDinkerConfigContents(config);
         free(config);
         return -1;
