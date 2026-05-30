@@ -18,6 +18,8 @@
 
 #define INTERNAL_ERROR printf("Internal error: %s:%d\n", __FUNCTION__, __LINE__)
 
+bool dssembler(char *inputFileName, char *outputFileName, bool linkedMode);
+
 typedef enum
 {
     form_1 = 0,

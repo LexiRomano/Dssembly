@@ -1,7 +1,9 @@
 #include "dssembly.h"
 
-static FILE *inputFile          = NULL;
-static char *outputFileLocation = NULL;
+FILE *inputFile      = NULL;
+char *inputFileName  = NULL;
+FILE *outputFile     = NULL;
+char *outputFileName = NULL;
 
 static labelList_t labelList = {0};
 static aliasList_t aliasList = {0};
@@ -331,35 +333,6 @@ static uint32_t formMaxArgSize[] =
     0xFFFFFF,  // form_7
 };
 
-static bool parseArgs(int argc, char* argv[])
-{
-    if (argc != 3)
-    {   
-        if (argc > 3)
-        {
-            printf("Too many arguments!\n");
-        }
-        else
-        {
-            printf("Insufficient arguments!\n");
-        }
-        return false;
-    }
-
-    inputFile = fopen(argv[1], "r");
-
-    if (NULL == inputFile)
-    {
-        printf("Failed to open input file \"%s\"\n", argv[1]);
-        return false;
-    }
-
-    outputFileLocation = argv[2];
-    
-
-    return true;
-}
-
 static uint8_t getRegsel(char *str)
 {
     for (uint8_t i = 0; i < 0x10; i++)
@@ -587,11 +560,11 @@ static int getInstructionSize(tokens_t *tokens, uint32_t lineNumber)
             {
                 if (tokens->tokenCount - 1 > formArgCount[descriptorInstance->primaryForm])
                 {
-                    printf("Error on line %u: too many arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+                    printf("%s:%u: too many arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
                 }
                 else
                 {
-                    printf("Error on line %u: too few arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+                    printf("%s:%u: too few arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
                 }
                 return -1;
             }
@@ -619,7 +592,7 @@ static int getInstructionSize(tokens_t *tokens, uint32_t lineNumber)
         }
     }
 
-    printf("Error on line %u: Invalid instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+    printf("%s:%u: Invalid instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
 
     return -1;
 }
@@ -631,13 +604,13 @@ static bool parseLabel(tokens_t *tokens, uint32_t lineNumber, uint32_t address)
 
     if (tokens->tokenCount > 1)
     {
-        printf("Error on line %u: Labels take no arguments\n", lineNumber);
+        printf("%s:%u: Labels take no arguments\n", inputFileName, lineNumber);
         return false;
     }
 
     if (1 == strlen(tokens->tokens[0]))
     {
-        printf("Error on line %u: Label requires a name\n", lineNumber);
+        printf("%s:%u: Label requires a name\n", inputFileName, lineNumber);
         return false;
     }
 
@@ -645,25 +618,25 @@ static bool parseLabel(tokens_t *tokens, uint32_t lineNumber, uint32_t address)
 
     if (true == isValidRegsel(labelWithoutColon))
     {
-        printf("Error on line %u: Label name cannot be a regsel\n", lineNumber);
+        printf("%s:%u: Label name cannot be a regsel\n", inputFileName, lineNumber);
         return false;
     }
 
     if (false == isAlphanumericString(labelWithoutColon))
     {
-        printf("Error on line %u: label \"%s\" contains invalid characters\n", lineNumber, labelWithoutColon);
+        printf("%s:%u: label \"%s\" contains invalid characters\n", inputFileName, lineNumber, labelWithoutColon);
         return false;
     }
 
     if (NULL != getLabel(&labelList, labelWithoutColon))
     {
-        printf("Error on line %u: label \"%s\" already exists\n", lineNumber, labelWithoutColon);
+        printf("%s:%u: label \"%s\" already exists\n", inputFileName, lineNumber, labelWithoutColon);
         return false;
     }
 
     if (NULL != getAlias(&aliasList, labelWithoutColon))
     {
-        printf("Error on line %u: label \"%s\" conflicts with alias of the same name\n", lineNumber, labelWithoutColon);
+        printf("%s:%u: label \"%s\" conflicts with alias of the same name\n", inputFileName, lineNumber, labelWithoutColon);
         return false;
     }
 
@@ -688,31 +661,31 @@ static bool parseAlias(tokens_t *tokens, uint32_t lineNumber)
 
     if (tokens->tokenCount != 3)
     {
-        printf("Error on line %u: alias requires two arguments\n", lineNumber);
+        printf("%s:%u: alias requires two arguments\n", inputFileName, lineNumber);
         return false;
     }
 
     if (false == isAlphanumericString(tokens->tokens[1]))
     {
-        printf("Error on line %u: alias \"%s\" contains invalid characters\n", lineNumber, tokens->tokens[1]);
+        printf("%s:%u: alias \"%s\" contains invalid characters\n", inputFileName, lineNumber, tokens->tokens[1]);
         return false;
     }
 
     if (NULL != getAlias(&aliasList, tokens->tokens[1]))
     {
-        printf("Error on line %u: alias \"%s\" already exists\n", lineNumber, tokens->tokens[1]);
+        printf("%s:%u: alias \"%s\" already exists\n", inputFileName, lineNumber, tokens->tokens[1]);
         return false;
     }
 
     if (NULL != getLabel(&labelList, tokens->tokens[1]))
     {
-        printf("Error on line %u: alias \"%s\" conflicts with label of the same name\n", lineNumber, tokens->tokens[1]);
+        printf("%s:%u: alias \"%s\" conflicts with label of the same name\n", inputFileName, lineNumber, tokens->tokens[1]);
         return false;
     }
 
     if (false == parseLiteral(tokens->tokens[2], &buf32))
     {
-        printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[2]);
+        printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[2]);
         return false;
     }
 
@@ -797,13 +770,13 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
     {
         if (2 != tokens->tokenCount)
         {
-            printf("Error on line %u: reserve directive takes one argument\n", lineNumber);
+            printf("%s:%u: reserve directive takes one argument\n", inputFileName, lineNumber);
             return -1;
         }
 
         if (false == parseLiteral(tokens->tokens[1], &buf32))
         {
-            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
             return -1;
         }
 
@@ -814,7 +787,7 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
     {
         if (3 != tokens->tokenCount)
         {
-            printf("Error on line %u: set directive takes two argument\n", lineNumber);
+            printf("%s:%u: set directive takes two argument\n", inputFileName, lineNumber);
             return -1;
         }
 
@@ -829,14 +802,14 @@ static int parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber)
 
         if (false == parseLiteral(tokens->tokens[1], &buf32))
         {
-            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
             return -1;
         }
 
         return buf32;
     }
 
-    printf("Error on line %u: invalid directive \"%s\"\n", lineNumber, tokens->tokens[0]);
+    printf("%s:%u: invalid directive \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
     return -1;
 }
 
@@ -866,13 +839,13 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
     {
         if (2 != tokens->tokenCount)
         {
-            printf("Error on line %u: reserve directive takes one argument\n", lineNumber);
+            printf("%s:%u: reserve directive takes one argument\n", inputFileName, lineNumber);
             return false;
         }
 
         if (false == parseLiteral(tokens->tokens[1], &reserveSize))
         {
-            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
             return false;
         }
 
@@ -881,13 +854,13 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
             if (reserveSize > 1 &&
                 0 != fseek(outputFile, reserveSize - 1, SEEK_CUR))
             {
-                printf("Error writing to \"%s\"\n", outputFileLocation);
+                printf("Error writing to \"%s\"\n", outputFileName);
                 return false;
             }
 
             if ('\0' != fputc('\0', outputFile))
             {
-                printf("Error writing to \"%s\"\n", outputFileLocation);
+                printf("Error writing to \"%s\"\n", outputFileName);
                 return false;
             }
         }
@@ -899,7 +872,7 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
     {
         if (3 != tokens->tokenCount)
         {
-            printf("Error on line %u: set directive takes two argument\n", lineNumber);
+            printf("%s:%u: set directive takes two argument\n", inputFileName, lineNumber);
             return false;
         }
 
@@ -909,7 +882,7 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
             parsedSetString = parseEscapeCharacters(tokens->tokens[2]);
             if (strlen(parsedSetString) + 1 !=  fwrite(parsedSetString, sizeof(char), strlen(parsedSetString) + 1, outputFile))
             {
-                printf("Error writing to \"%s\"\n", outputFileLocation);
+                printf("Error writing to \"%s\"\n", outputFileName);
                 free(parsedSetString);
                 return false;
             }
@@ -919,13 +892,13 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
 
         if (false == parseLiteral(tokens->tokens[1], &reserveSize))
         {
-            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[1]);
+            printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
             return false;
         }
 
         if (false == parseLiteral(tokens->tokens[2], &setValue))
         {
-            printf("Error on line %u: could not parse literal \"%s\"\n", lineNumber, tokens->tokens[2]);
+            printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[2]);
             return false;
         }
 
@@ -933,13 +906,13 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
             reserveSize != 2 &&
             reserveSize != 4)
         {
-            printf("Error on line %u: sets of numeric literals must be 1, 2, or 4 bytes\n", lineNumber);
+            printf("%s:%u: sets of numeric literals must be 1, 2, or 4 bytes\n", inputFileName, lineNumber);
             return false;
         }
 
         if (setValue >= (((uint64_t) 0x100) << ((reserveSize - 1) * 8)))
         {
-            printf("Error on line %u: %s cannot fit into %u bytes\n", lineNumber, tokens->tokens[2], reserveSize);
+            printf("%s:%u: %s cannot fit into %u bytes\n", inputFileName, lineNumber, tokens->tokens[2], reserveSize);
             return false;
         }
 
@@ -960,14 +933,14 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t lineNumber, F
 
         if (1 != rc)
         {
-            printf("Error writing to \"%s\"\n", outputFileLocation);
+            printf("Error writing to \"%s\"\n", outputFileName);
             return false;
         }
 
         return true;
     }
 
-    printf("Error on line %u: invalid directive \"%s\"\n", lineNumber, tokens->tokens[0]);
+    printf("%s:%u: invalid directive \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
     return false;
 }
 
@@ -1000,11 +973,11 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
     {
         if (tokens->tokenCount - 1 > formArgCount[descriptor->primaryForm])
         {
-            printf("Error on line %u: too many arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+            printf("%s:%u: too many arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
         }
         else
         {
-            printf("Error on line %u: too few arguments for instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+            printf("%s:%u: too few arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
         }
         return false;
     }
@@ -1023,7 +996,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
         case 3:
             if (false == isValidRegsel(tokens->tokens[3]))
             {
-                printf("Error on line %u: argument #3 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                printf("%s:%u: argument #3 for \"%s\" must be a regsel\n", inputFileName, lineNumber, tokens->tokens[0]);
                 return false;
             }
 
@@ -1032,7 +1005,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
         case 2:
             if (false == isValidRegsel(tokens->tokens[2]))
             {
-                printf("Error on line %u: argument #2 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                printf("%s:%u: argument #2 for \"%s\" must be a regsel\n", inputFileName, lineNumber, tokens->tokens[0]);
                 return false;
             }
 
@@ -1041,7 +1014,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
         case 1:
             if (false == isValidRegsel(tokens->tokens[1]))
             {
-                printf("Error on line %u: argument #1 for \"%s\" must be a regsel\n", lineNumber, tokens->tokens[0]);
+                printf("%s:%u: argument #1 for \"%s\" must be a regsel\n", inputFileName, lineNumber, tokens->tokens[0]);
                 return false;
             }
 
@@ -1109,10 +1082,9 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
             {
                 if (false == parseLiteral(literalArgument, &literalValue))
                 {
-                    printf("Error on line %u: could not resolve argument \"%s\"\n", lineNumber, literalArgument);
+                    printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
                     return false;
                 }
-
             }
             else
             {
@@ -1123,7 +1095,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
         {
             if (false == descriptor->takesLabel)
             {
-                printf("Error on line %u: cannot use a label as an argument for \"%s\"\n", lineNumber, tokens->tokens[0]);
+                printf("%s:%u: cannot use a label as an argument for \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
                 return false;
             }
             literalValue = label->address - address;
@@ -1131,8 +1103,8 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
 
         if (literalValue > formMaxArgSize[form])
         {
-            printf("Error on line %u: \"%s\" does not fit as an argument for \"%s\"\n",
-                   lineNumber, literalArgument, tokens->tokens[0]);
+            printf("%s:%u: \"%s\" does not fit as an argument for \"%s\"\n",
+                   inputFileName, lineNumber, literalArgument, tokens->tokens[0]);
             return false;
         }
 
@@ -1141,7 +1113,7 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
 
     if (1 != fwrite(&outputBuf, 4, 1, outputFile))
     {
-        printf("Error writing to \"%s\"\n", outputFileLocation);
+        printf("Error writing to \"%s\"\n", outputFileName);
         return false;
     }
 
@@ -1171,7 +1143,7 @@ static bool parseArgumentAugment(tokens_t                *tokens,
         {
             if (false == parseLiteral(literalArgument, &literalValue))
             {
-                printf("Error on line %u: could not resolve argument \"%s\"\n", lineNumber, literalArgument);
+                printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
                 return false;
             }
 
@@ -1185,7 +1157,7 @@ static bool parseArgumentAugment(tokens_t                *tokens,
     {
         if (false == descriptor->takesLabel)
         {
-            printf("Error on line %u: cannot use a label as an argument for \"%s\"\n", lineNumber, tokens->tokens[0]);
+            printf("%s:%u: cannot use a label as an argument for \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
             return false;
         }
         literalValue = label->address - address;
@@ -1193,7 +1165,7 @@ static bool parseArgumentAugment(tokens_t                *tokens,
 
     if (1 != fwrite(&literalValue, 4, 1, outputFile))
     {
-        printf("Error writing to \"%s\"\n", outputFileLocation);
+        printf("Error writing to \"%s\"\n", outputFileName);
         return false;
     }
 
@@ -1234,7 +1206,7 @@ static bool parseInstruction(tokens_t *tokens, uint32_t lineNumber, FILE *output
             if (descriptorInstance->hasInstructionAugment &&
                 1 != fwrite(&(descriptorInstance->instructionAugment), 1, 1, outputFile))
             {
-                printf("Error writing to \"%s\"\n", outputFileLocation);
+                printf("Error writing to \"%s\"\n", outputFileName);
                 return false;
             }
 
@@ -1252,7 +1224,7 @@ static bool parseInstruction(tokens_t *tokens, uint32_t lineNumber, FILE *output
         }
     }
 
-    printf("Error on line %u: unknown instruction \"%s\"\n", lineNumber, tokens->tokens[0]);
+    printf("%s:%u: unknown instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
 
     return false;
 }
@@ -1328,18 +1300,9 @@ static bool firstPass()
 
 static bool secondPass()
 {
-    FILE    *outputFile        = NULL;
     char     inputBuffer[2048] = {0};
     tokens_t tokens            = {0};
     uint32_t lineNumber        = 0;
-
-    outputFile = fopen(outputFileLocation, "wb");
-
-    if (NULL == outputFile)
-    {
-        printf("Could not write to output file \"%s\"\n", outputFileLocation);
-        return false;
-    }
 
     rewind(inputFile);
 
@@ -1352,8 +1315,6 @@ static bool secondPass()
         if (false == parseTokens(inputBuffer, &tokens))
         {
             INTERNAL_ERROR;
-            fclose(outputFile);
-            remove(outputFileLocation);
             return false;
         }
 
@@ -1373,8 +1334,6 @@ static bool secondPass()
             // Is dot directive
             if (false == parseDotDirectiveSecondPass(&tokens, lineNumber, outputFile))
             {
-                fclose(outputFile);
-                remove(outputFileLocation);
                 freeTokensContents(&tokens);
                 return false;
             }
@@ -1384,14 +1343,11 @@ static bool secondPass()
 
         if (false == parseInstruction(&tokens, lineNumber, outputFile))
         {
-            fclose(outputFile);
-            remove(outputFileLocation);
             freeTokensContents(&tokens);
             return false;
         }
     }
 
-    fclose(outputFile);
     freeTokensContents(&tokens);
     return true;
 }
@@ -1399,33 +1355,57 @@ static bool secondPass()
 static void teardown()
 {
     freeLabelListContents(&labelList);
-
-    if (NULL != inputFile)
-    {
-        fclose(inputFile);
-        inputFile = NULL;
-    }
+    freeAliasListContents(&aliasList);
 }
 
-int main(int argc, char* argv[])
+bool dssembler(char *in, char *out, bool linkedMode)
 {
-    printf("Dssembly\n");
-
-    if (false == parseArgs(argc, argv))
+    if (NULL == in ||
+        NULL == out)
     {
-        return -1;
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (linkedMode)
+    {
+        printf("Linked mode currently unsupported\n");
+        return false;
+    }
+
+    inputFileName  = in;
+    outputFileName = out;
+
+    inputFile = fopen(inputFileName, "r");
+
+    if (NULL == inputFile)
+    {
+        printf("Could not open input file \"%s\"\n", inputFileName);
+        return false;
+    }
+
+    outputFile = fopen(outputFileName, "wb");
+
+    if (NULL == outputFile)
+    {
+        printf("Could not create output file \"%s\"\n", outputFileName);
+        fclose(inputFile);
+        return false;
     }
 
     if (false == firstPass() ||
         false == secondPass())
     {
         teardown();
-        return -1;
+        fclose(inputFile);
+        fclose(outputFile);
+        remove(outputFileName);
+        return false;
     }
 
     teardown();
+    fclose(inputFile);
+    fclose(outputFile);
 
-    printf("Success!\n");
-
-    return 0;
+    return true;
 }
