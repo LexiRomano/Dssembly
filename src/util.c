@@ -154,6 +154,214 @@ void freeAliasListContents(aliasList_t *aliasList)
     aliasList->last  = NULL;
 }
 
+resolutionInstance_t *addNewResolutionInstance(resolutionInstanceList_t *instances)
+{
+    if (NULL == instances)
+    {
+        return NULL;
+    }
+
+    if (NULL == instances->first)
+    {
+        instances->first = calloc(1, sizeof(resolutionInstance_t));
+        instances->last = instances->first;
+
+        instances->count++;
+
+        return instances->last;
+    }
+
+    if (NULL == instances->last)
+    {
+        return NULL;
+    }
+
+    instances->last->next = calloc(1, sizeof(resolutionInstance_t));
+    instances->last = instances->last->next;
+
+    instances->count++;
+
+    return instances->last;
+}
+
+void freeResolutionInstanceListContents(resolutionInstanceList_t *instances)
+{
+    resolutionInstance_t *current = NULL;
+    resolutionInstance_t *next    = NULL;
+
+    if (NULL == instances)
+    {
+        return;
+    }
+
+    current = instances->first;
+    while (NULL != current)
+    {
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    instances->first = NULL;
+    instances->last  = NULL;
+    instances->count = 0;
+}
+
+requiredLabel_t *addNewRequiredLabel(requiredLabelList_t *requiredLabelList)
+{
+    if (NULL == requiredLabelList)
+    {
+        return NULL;
+    }
+
+    if (NULL == requiredLabelList->first)
+    {
+        requiredLabelList->first = calloc(1, sizeof(requiredLabel_t));
+        requiredLabelList->last = requiredLabelList->first;
+
+        return requiredLabelList->last;
+    }
+
+    if (NULL == requiredLabelList->last)
+    {
+        return NULL;
+    }
+
+    requiredLabelList->last->next = calloc(1, sizeof(requiredLabel_t));
+    requiredLabelList->last = requiredLabelList->last->next;
+
+    return requiredLabelList->last;
+}
+
+requiredLabel_t *getRequiredLabel(requiredLabelList_t *requiredLabelList, char *name)
+{
+    if (NULL == name ||
+        NULL == requiredLabelList)
+    {
+        return NULL;
+    }
+
+    for (requiredLabel_t *r = requiredLabelList->first; r != NULL; r = r->next)
+    {
+        if (NULL == r->name)
+        {
+            return NULL;
+        }
+
+        if (0 == strcmp(r->name, name))
+        {
+            return r;
+        }
+    }
+
+    return NULL;
+}
+
+void freeRequiredLabelList(requiredLabelList_t *requiredLabelList)
+{
+    requiredLabel_t *current = NULL;
+    requiredLabel_t *next    = NULL;
+
+    if (NULL == requiredLabelList)
+    {
+        return;
+    }
+
+    current = requiredLabelList->first;
+    while (NULL != current)
+    {
+        freeResolutionInstanceListContents(&(current->instances));
+
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    requiredLabelList->first = NULL;
+    requiredLabelList->last  = NULL;
+}
+
+section_t *addNewSection(sectionList_t *sectionList)
+{
+    if (NULL == sectionList)
+    {
+        return NULL;
+    }
+
+    if (NULL == sectionList->first)
+    {
+        sectionList->first = calloc(1, sizeof(section_t));
+        sectionList->last = sectionList->first;
+
+        return sectionList->last;
+    }
+
+    if (NULL == sectionList->last)
+    {
+        return NULL;
+    }
+
+    sectionList->last->next = calloc(1, sizeof(section_t));
+    sectionList->last = sectionList->last->next;
+
+    return sectionList->last;
+}
+
+section_t *getSection(sectionList_t *sectionList, char *name)
+{
+    if (NULL == name ||
+        NULL == sectionList)
+    {
+        return NULL;
+    }
+
+    for (section_t *s = sectionList->first; s != NULL; s = s->next)
+    {
+        if (NULL == s->name)
+        {
+            return NULL;
+        }
+
+        if (0 == strcmp(s->name, name))
+        {
+            return s;
+        }
+    }
+
+    return NULL;
+}
+
+void freeSectionListContents(sectionList_t *sectionList)
+{
+    section_t *current = NULL;
+    section_t *next    = NULL;
+
+    if (NULL == sectionList)
+    {
+        return;
+    }
+
+    current = sectionList->first;
+    while (NULL != current)
+    {
+        if (NULL != current->name)
+        {
+            free(current->name);
+            current->name = NULL;
+        }
+
+        freeLabelListContents(&(current->labelList));
+
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    sectionList->first = NULL;
+    sectionList->last  = NULL;
+}
+
+
 void freeTokensContents(tokens_t *tokens)
 {
     if (NULL == tokens)

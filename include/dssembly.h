@@ -17,6 +17,9 @@
 #define ALIAS_STR      ".alias"
 #define RESERVE_STR    ".reserve"
 #define SET_STR        ".set"
+#define SECTION_STR    ".section"
+#define EXPORT_STR     ".export"
+#define REQUIRES_STR   ".requires"
 #define OP_CODE_MAX_LEN 32
 
 #define OP_CODE_OFFSET 24
@@ -52,6 +55,51 @@ typedef struct
     label_t *first;
     label_t *last;
 } labelList_t;
+
+typedef struct resolutionInstance_t
+{
+    uint32_t instructionOffset;
+    uint8_t  injectionOffset;
+    struct resolutionInstance_t *next;
+} resolutionInstance_t;
+
+typedef struct
+{
+    resolutionInstance_t *first;
+    resolutionInstance_t *last;
+    uint16_t              count;
+} resolutionInstanceList_t;
+
+typedef struct requiredLabel_t
+{
+    char                    *name;
+    resolutionInstanceList_t instances;
+    struct requiredLabel_t  *next;
+} requiredLabel_t;
+
+typedef struct
+{
+    requiredLabel_t *first;
+    requiredLabel_t *last;
+} requiredLabelList_t;
+
+typedef struct section_t
+{
+    char               *name;
+    uint32_t            codeSegmentOffset;
+    uint32_t            exportedLabelsOffset;
+    uint32_t            requiredLabelsOffset;
+    labelList_t         labelList;
+    labelList_t         exportedLabels;
+    requiredLabelList_t requiredLabels;
+    struct section_t *next;
+} section_t;
+
+typedef struct
+{
+    section_t *first;
+    section_t *last;
+} sectionList_t;
 
 typedef struct alias_t
 {
@@ -111,6 +159,17 @@ typedef struct
 label_t *addNewLabel          (labelList_t *labelList);
 label_t *getLabel             (labelList_t *labelList, char *name);
 void     freeLabelListContents(labelList_t *labelList);
+
+resolutionInstance_t *addNewResolutionInstance          (resolutionInstanceList_t *instances);
+void                  freeResolutionInstanceListContents(resolutionInstanceList_t *instances);
+
+requiredLabel_t *addNewRequiredLabel  (requiredLabelList_t *requiredLabelList);
+requiredLabel_t *getRequiredLabel     (requiredLabelList_t *requiredLabelList, char *name);
+void             freeRequiredLabelList(requiredLabelList_t *requiredLabelList);
+
+section_t *addNewSection          (sectionList_t *sectionList);
+section_t *getSection             (sectionList_t *sectionList, char *name);
+void       freeSectionListContents(sectionList_t *sectionList);
 
 alias_t *addNewAlias          (aliasList_t *aliasList);
 alias_t *getAlias             (aliasList_t *aliasList, char *name);
