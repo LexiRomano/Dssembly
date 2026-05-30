@@ -3,6 +3,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <dirent.h>
+
+#define TEMP_DIR_NAME "dTemp"
+#define DINKER_CONFIG_SOURCE ".source"
+#define DINKER_CONFIG_OUT    ".out"
+#define DINKER_DEFAULT_OUT   "out.bin"
+#define DINKER_OBJECT_EXT    ".dob"
 
 #define MAX_TOKENS 8
 #define COMMENT_PREFIX "//"
@@ -81,6 +89,23 @@ typedef struct
     uint8_t tokenCount;
 } tokens_t;
 
+typedef struct
+{
+    char *sourceName;
+    char *objectName;
+} inputFile_t;
+
+typedef struct
+{
+    inputFile_t **inputFiles;
+    uint8_t       inputFileCount;
+
+    char         *outputFile;
+
+    char        **sections;
+    uint8_t       sectionCount;
+} dinkerConfig_t;
+
 // Util functions
 
 label_t *addNewLabel          (labelList_t *labelList);
@@ -95,3 +120,5 @@ void freeTokensContents(tokens_t *tokens);
 bool parseTokens       (char* inputBuffer, tokens_t *tokens);
 
 bool isAlphanumericString(char *input);
+
+void freeDinkerConfigContents(dinkerConfig_t *config);
