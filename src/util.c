@@ -352,3 +352,62 @@ bool isAlphanumericString(char *input)
         return false;
     }
 }
+
+void freeDinkerConfigContents(dinkerConfig_t *config)
+{
+    if (NULL == config)
+    {
+        return;
+    }
+
+    if (NULL != config->inputFiles &&
+        0    != config->inputFileCount)
+    {
+        for (uint8_t i = 0; i < config->inputFileCount; i++)
+        {
+            if (NULL != config->inputFiles[i])
+            {
+                if (NULL != config->inputFiles[i]->sourceName)
+                {
+                    free(config->inputFiles[i]->sourceName);
+                    config->inputFiles[i]->sourceName = NULL;
+                }
+
+                if (NULL != config->inputFiles[i]->objectName)
+                {
+                    free(config->inputFiles[i]->objectName);
+                    config->inputFiles[i]->objectName = NULL;
+                }
+
+                free(config->inputFiles[i]);
+            }
+        }
+
+        free(config->inputFiles);
+        config->inputFiles     = NULL;
+        config->inputFileCount = 0;
+    }
+
+    if (NULL != config->outputFile)
+    {
+        free(config->outputFile);
+        config->outputFile = NULL;
+    }
+
+    if (NULL != config->sections &&
+        0    != config->sectionCount)
+    {
+        for (uint8_t i = 0; i < config->sectionCount; i++)
+        {
+            if (NULL != config->sections[i])
+            {
+                free(config->sections[i]);
+                config->sections[i] = NULL;
+            }
+        }
+
+        free(config->sections);
+        config->sections     = NULL;
+        config->sectionCount = 0;
+    }
+}
