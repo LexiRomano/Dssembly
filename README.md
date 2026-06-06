@@ -15,9 +15,11 @@ bash$ ./make.sh
 Once built, use dssembly as such:
 
 ```
-bash$ ./dssembly <inputFileName> <outputFileName>
+bash$ ./dssembly  #print usage
+bash$ ./dssembly -r <inputFileName> <outputFileName>
+bash$ ./dssembly <configFileName>
 ```
 
 ## Resources
 
-See `doc/syntax.md` for a list of commands and syntax examples.
+See `doc/syntax.md` for a list of commands and syntax examples. See `doc/linker-config` to see how to configure the linker (dinker).

@@ -54,6 +54,30 @@ Aliases are text representation of numbers. They are defined with the `.alias` d
     LOAD-ABS G0 0x9000
 ```
 
+### Include
+
+Include will define aliases defined in another file. Includes do not occur recursively if that file also has an include directive. They are defined with the `.include` directive as such:
+
+```
+// constant.dsb contains a bunch of .alias
+// directives, including "TABLE_ADDR" and
+// "TABLE_END"
+.include constants.dsb
+
+    MOVE      G0 0
+    MOVE      G1 TABLE_ADDR
+:loop
+    LOAD-W1S0 G2 G1
+    COMP      G2 TABLE_END
+    BREQ      break
+    ADD       G0 G0 1
+    ADD       G1 G1 1
+    BRAL      loop
+
+:break
+
+```
+
 ### Reserve
 
 Reservations will leave a certain number of bytes as empty space between instructions. They are defined with the `.reserve` directive as such:

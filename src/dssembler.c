@@ -657,38 +657,38 @@ static bool parseLabel(char *labelWithoutColon, uint32_t lineNumber, uint32_t ad
     return true;
 }
 
-static bool parseAlias(tokens_t *tokens, uint32_t lineNumber)
+static bool parseAlias(tokens_t *tokens, char *fileName, uint32_t lineNumber)
 {
     uint32_t buf32    = 0;
     alias_t *newAlias = NULL;
 
     if (tokens->tokenCount != 3)
     {
-        printf("%s:%u: alias requires two arguments\n", inputFileName, lineNumber);
+        printf("%s:%u: alias requires two arguments\n", fileName, lineNumber);
         return false;
     }
 
     if (false == isAlphanumericString(tokens->tokens[1]))
     {
-        printf("%s:%u: alias \"%s\" contains invalid characters\n", inputFileName, lineNumber, tokens->tokens[1]);
+        printf("%s:%u: alias \"%s\" contains invalid characters\n", fileName, lineNumber, tokens->tokens[1]);
         return false;
     }
 
     if (NULL != getAlias(&aliasList, tokens->tokens[1]))
     {
-        printf("%s:%u: alias \"%s\" already exists\n", inputFileName, lineNumber, tokens->tokens[1]);
+        printf("%s:%u: alias \"%s\" already exists\n", fileName, lineNumber, tokens->tokens[1]);
         return false;
     }
 
     if (NULL != getLabel(currentLabelList, tokens->tokens[1]))
     {
-        printf("%s:%u: alias \"%s\" conflicts with label of the same name\n", inputFileName, lineNumber, tokens->tokens[1]);
+        printf("%s:%u: alias \"%s\" conflicts with label of the same name\n", fileName, lineNumber, tokens->tokens[1]);
         return false;
     }
 
     if (false == parseLiteral(tokens->tokens[2], &buf32))
     {
-        printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[2]);
+        printf("%s:%u: could not parse literal \"%s\"\n", fileName, lineNumber, tokens->tokens[2]);
         return false;
     }
 
@@ -702,6 +702,65 @@ static bool parseAlias(tokens_t *tokens, uint32_t lineNumber)
 
     newAlias->alias  = strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)), tokens->tokens[1]);
     newAlias->value = buf32;
+
+    return true;
+}
+
+static bool doInclude(tokens_t *tokens, uint32_t lineNumber)
+{
+    FILE    *fd                = NULL;
+    char     inputBuffer[2048] = {0};
+    uint32_t fileLineNumber    = 0;
+    tokens_t fileTokens        = {0};
+
+    if (NULL == tokens)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (2 != tokens->tokenCount)
+    {
+        printf("%s:%u: include directive takes one argument\n", inputFileName, lineNumber);
+        return false;
+    }
+
+    fd = fopen(tokens->tokens[1], "r");
+
+    if (NULL == fd)
+    {
+        printf("%s:%u: failed to open \"%s\" for import\n", inputFileName, lineNumber, tokens->tokens[1]);
+        return false;
+    }
+
+    while (fgets(inputBuffer, 2048, fd))
+    {
+        fileLineNumber++;
+
+        freeTokensContents(&fileTokens);
+
+        if (false == parseTokens(inputBuffer, &fileTokens))
+        {
+            fclose(fd);
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        if (0 == fileTokens.tokenCount)
+        {
+            continue;
+        }
+
+        if (0 != strcmp(fileTokens.tokens[0], ALIAS_STR))
+        {
+            continue;
+        }
+
+        if (false == parseAlias(&fileTokens, tokens->tokens[1], fileLineNumber))
+        {
+            return false;
+        }
+    }
 
     return true;
 }
@@ -764,11 +823,12 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
 
     if (0 == strcmp(tokens->tokens[0], ALIAS_STR))
     {
-        if (false == parseAlias(tokens, lineNumber))
-        {
-            return false;
-        }
-        return true;
+        return parseAlias(tokens, inputFileName, lineNumber);
+    }
+
+    if (0 == strcmp(tokens->tokens[0], INCLUDE_STR))
+    {
+        return doInclude(tokens, lineNumber);
     }
 
     if (0 == strcmp(tokens->tokens[0], RESERVE_STR))
@@ -1026,6 +1086,11 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
     }
 
     if (0 == strcmp(tokens->tokens[0], ALIAS_STR))
+    {
+        return true;
+    }
+
+    if (0 == strcmp(tokens->tokens[0], INCLUDE_STR))
     {
         return true;
     }

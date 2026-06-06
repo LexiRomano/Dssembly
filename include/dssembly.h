@@ -15,6 +15,7 @@
 #define MAX_TOKENS 8
 #define COMMENT_PREFIX "//"
 #define ALIAS_STR      ".alias"
+#define INCLUDE_STR    ".include"
 #define RESERVE_STR    ".reserve"
 #define SET_STR        ".set"
 #define SECTION_STR    ".section"
