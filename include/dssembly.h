@@ -86,10 +86,12 @@ typedef struct
 typedef struct section_t
 {
     char               *name;
+    char               *source;
     uint32_t            codeSegmentOffset;
     uint32_t            exportedLabelsOffset;
     uint32_t            requiredLabelsOffset;
     labelList_t         labelList;
+    void               *codeSegment;
     labelList_t         exportedLabels;
     requiredLabelList_t requiredLabels;
     struct section_t *next;
@@ -145,14 +147,16 @@ typedef struct
 
 typedef struct
 {
-    inputFile_t **inputFiles;
-    uint8_t       inputFileCount;
+    inputFile_t *inputFiles;
+    uint8_t      inputFileCount;
 
-    char         *outputFile;
+    char        *outputFile;
 
-    char        **sections;
-    uint8_t       sectionCount;
+    char       **sections;
+    uint8_t      sectionCount;
 } dinkerConfig_t;
+
+bool dinker(dinkerConfig_t *config);
 
 // Util functions
 
