@@ -603,24 +603,15 @@ static int getInstructionSize(tokens_t *tokens, uint32_t lineNumber)
     return -1;
 }
 
-static bool parseLabel(tokens_t *tokens, uint32_t lineNumber, uint32_t address)
+static bool parseLabel(char *labelWithoutColon, uint32_t lineNumber, uint32_t address)
 {
-    label_t *newLabel          = NULL;
-    char    *labelWithoutColon = NULL;
+    label_t *newLabel = NULL;
 
-    if (tokens->tokenCount > 1)
+    if (NULL == labelWithoutColon)
     {
-        printf("%s:%u: Labels take no arguments\n", inputFileName, lineNumber);
+        INTERNAL_ERROR;
         return false;
     }
-
-    if (1 == strlen(tokens->tokens[0]))
-    {
-        printf("%s:%u: Label requires a name\n", inputFileName, lineNumber);
-        return false;
-    }
-
-    labelWithoutColon = &(tokens->tokens[0][1]);
 
     if (NULL == currentSection)
     {
@@ -761,6 +752,8 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
 {
     uint32_t buf32           = 0;
     char    *parsedSetString = NULL;
+    label_t *tmpLabel1       = NULL;
+    label_t *tmpLabel2       = NULL;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -893,14 +886,31 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
             return false;
         }
 
-        if (NULL != getLabel(currentExportedLabels, tokens->tokens[1]))
+        if (false == parseLabel(tokens->tokens[1], lineNumber, *address))
         {
-            printf("%s:%u: label \"%s\" exported twice\n", inputFileName, lineNumber, tokens->tokens[1]);
+            // Error already logged
             return false;
         }
 
-        addNewLabel(currentExportedLabels)->label =
-                strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)), tokens->tokens[1]);
+        tmpLabel1 = addNewLabel(currentExportedLabels);
+
+        if (NULL == tmpLabel1)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        tmpLabel1->label = strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)), tokens->tokens[1]);
+
+        tmpLabel2 = getLabel(currentLabelList, tokens->tokens[1]);
+
+        if (NULL == tmpLabel2)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        tmpLabel1->address = tmpLabel2->address;
 
         return true;
     }
@@ -1007,8 +1017,6 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
     uint8_t  buf8            = 0;
     int      rc              = 0;
     char    *parsedSetString = NULL;
-    label_t *tmpLabel        = NULL;
-    label_t *tmpExport       = NULL;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -1170,35 +1178,6 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
 
     if (0 == strcmp(tokens->tokens[0], EXPORT_STR))
     {
-        if (false == link)
-        {
-            return true;
-        }
-
-        if (2 != tokens->tokenCount)
-        {
-            printf("%s:%u: export directive takes one argument\n", inputFileName, lineNumber);
-            return false;
-        }
-
-        tmpExport = getLabel(currentExportedLabels, tokens->tokens[1]);
-
-        if (NULL == tmpExport)
-        {
-            INTERNAL_ERROR;
-            return false;
-        }
-
-        tmpLabel = getLabel(currentLabelList, tokens->tokens[1]);
-
-        if (NULL == tmpLabel)
-        {
-            printf("%s:%u: label \"%s\" does not exist\n", inputFileName, lineNumber, tokens->tokens[1]);
-            return false;
-        }
-
-        tmpExport->address = tmpLabel->address;
-
         return true;
     }
 
@@ -1557,7 +1536,19 @@ static bool firstPass()
         if (':' == tokens.tokens[0][0])
         {
             // Is label
-            if (false == parseLabel(&tokens, lineNumber, address))
+            if (tokens.tokenCount > 1)
+            {
+                printf("%s:%u: Labels take no arguments\n", inputFileName, lineNumber);
+                return false;
+            }
+
+            if (1 == strlen(tokens.tokens[0]))
+            {
+                printf("%s:%u: Label requires a name\n", inputFileName, lineNumber);
+                return false;
+            }
+
+            if (false == parseLabel(&(tokens.tokens[0][1]), lineNumber, address))
             {
                 freeTokensContents(&tokens);
                 return false;
