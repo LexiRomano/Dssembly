@@ -350,6 +350,12 @@ void freeSectionListContents(sectionList_t *sectionList)
             current->name = NULL;
         }
 
+        if (NULL != current->source)
+        {
+            free(current->source);
+            current->source = NULL;
+        }
+
         freeLabelListContents(&(current->labelList));
 
         next = current->next;
@@ -573,21 +579,16 @@ void freeDinkerConfigContents(dinkerConfig_t *config)
     {
         for (uint8_t i = 0; i < config->inputFileCount; i++)
         {
-            if (NULL != config->inputFiles[i])
+            if (NULL != config->inputFiles[i].sourceName)
             {
-                if (NULL != config->inputFiles[i]->sourceName)
-                {
-                    free(config->inputFiles[i]->sourceName);
-                    config->inputFiles[i]->sourceName = NULL;
-                }
+                free(config->inputFiles[i].sourceName);
+                config->inputFiles[i].sourceName = NULL;
+            }
 
-                if (NULL != config->inputFiles[i]->objectName)
-                {
-                    free(config->inputFiles[i]->objectName);
-                    config->inputFiles[i]->objectName = NULL;
-                }
-
-                free(config->inputFiles[i]);
+            if (NULL != config->inputFiles[i].objectName)
+            {
+                free(config->inputFiles[i].objectName);
+                config->inputFiles[i].objectName = NULL;
             }
         }
 

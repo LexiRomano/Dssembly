@@ -1,4 +1,4 @@
-#include <dssembly.h>
+#include "dssembly.h"
 
 bool argHelp = false;
 bool argRaw  = false;
@@ -314,7 +314,7 @@ static bool parseConfigFile(dinkerConfig_t **config)
         return false;
     }
 
-    newConfig->inputFiles = calloc(newConfig->inputFileCount, sizeof(inputFile_t*));
+    newConfig->inputFiles = calloc(newConfig->inputFileCount, sizeof(inputFile_t));
     newConfig->sections   = calloc(newConfig->sectionCount,   sizeof(char*));
 
     if (false == hasOutput)
@@ -342,12 +342,11 @@ static bool parseConfigFile(dinkerConfig_t **config)
 
         if (0 == strncmp(tokens.tokens[0], DINKER_CONFIG_SOURCE, strlen(DINKER_CONFIG_SOURCE)))
         {
-            newConfig->inputFiles[sourceIndex] = calloc(1, sizeof(inputFile_t));
-            newConfig->inputFiles[sourceIndex]->sourceName =
+            newConfig->inputFiles[sourceIndex].sourceName =
                     strcpy(calloc(strlen(tokens.tokens[1]) + 1, sizeof(char*)), tokens.tokens[1]);
 
-            newConfig->inputFiles[sourceIndex]->objectName =
-                    convertToObjectName(newConfig->inputFiles[sourceIndex]->sourceName,
+            newConfig->inputFiles[sourceIndex].objectName =
+                    convertToObjectName(newConfig->inputFiles[sourceIndex].sourceName,
                                         lineNumber);
 
             sourceIndex++;
@@ -409,8 +408,8 @@ int main(int argc, char *argv[])
     success = true;
     for (uint8_t i = 0; i < config->inputFileCount; i++)
     {
-        success &= dssembler(config->inputFiles[i]->sourceName,
-                             config->inputFiles[i]->objectName,
+        success &= dssembler(config->inputFiles[i].sourceName,
+                             config->inputFiles[i].objectName,
                              true);
     }
 
@@ -425,8 +424,8 @@ int main(int argc, char *argv[])
         free(config);
         return -1;
     }
-    
-    printf("Linked mode currently unsupported\n");
+
+    success = dinker(config);
 
     if (false == argKeep)
     {
@@ -435,5 +434,5 @@ int main(int argc, char *argv[])
 
     freeDinkerConfigContents(config);
     free(config);
-    return -1;
+    return success ? 0 : -1;
 }
