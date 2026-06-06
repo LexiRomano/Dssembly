@@ -108,7 +108,7 @@ Multiple sections may be defined in one dssembly file, but labels may not be sha
 
 ### Export and Requires
 
-The export directive allows labels from a given section to be used in other sections. The requires directive allows the usage of an exported label form another section. These directives are defined with the `.export` and `.requires` directives as such:
+The export defines a label for a given section to be used in other sections. The requires directive allows the usage of an exported label form another section. These directives are defined with the `.export` and `.requires` directives as such:
 
 ```
 .section code
@@ -124,8 +124,6 @@ The export directive allows labels from a given section to be used in other sect
 .section text
 
 .export helloWorld
-
-:helloWorld
     .set * "Hello, world!"
 ```
 
