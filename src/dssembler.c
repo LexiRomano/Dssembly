@@ -48,6 +48,8 @@ static instructionDescriptor_t instructionDescriptors[] =
     {"INTTRG",        0x21, form_4, true,  0x31, form_7, false, 0,    false, false},
     {"INTFIN",        0x41, form_6, false, 0,    0,      false, 0,    false, false},
     {"INTGPR",        0x51, form_4, false, 0,    0,      false, 0,    false, false},
+    {"INTGRA",        0x61, form_4, false, 0,    0,      false, 0,    false, false},
+    {"INTSRA",        0x71, form_4, false, 0,    0,      false, 0,    false, false},
     {"LOAD",          0x02, form_2, true,  0x03, form_4, true,  0x80, true,  true},
     {"LOAD-ABS",      0x02, form_2, true,  0x03, form_4, true,  0x00, true,  false},
     {"LOAD-OA",       0x02, form_2, true,  0x03, form_4, true,  0x01, true,  false},
