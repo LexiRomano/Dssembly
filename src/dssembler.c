@@ -325,6 +325,7 @@ static instructionDescriptor_t instructionDescriptors[] =
     {"BRNV-P-OB",     0xEC, form_4, true,  0xED, form_6, true,  0x42, true,  false},
     {"BRNV-P-OC",     0xEC, form_4, true,  0xED, form_6, true,  0x43, true,  false},
     {"NOOP",          0x00, form_6, false, 0,    0,      false, 0,    false, false},
+    {"DEBUG",         0x10, form_4, false, 0,    0,      false, 0,    false, false},
     {"TERM",          0xFF, form_6, false, 0,    0,      false, 0,    false, false}
 };
 
