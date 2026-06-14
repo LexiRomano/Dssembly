@@ -84,17 +84,32 @@ typedef struct
     requiredLabel_t *last;
 } requiredLabelList_t;
 
+typedef struct originRelative_t
+{
+    uint32_t                 address;
+    struct originRelative_t *next;
+} originRelative_t;
+
+typedef struct
+{
+    originRelative_t *first;
+    originRelative_t *last;
+    uint16_t          count;
+} originRelativeList_t;
+
 typedef struct section_t
 {
-    char               *name;
-    char               *source;
-    uint32_t            codeSegmentOffset;
-    uint32_t            exportedLabelsOffset;
-    uint32_t            requiredLabelsOffset;
-    labelList_t         labelList;
-    void               *codeSegment;
-    labelList_t         exportedLabels;
-    requiredLabelList_t requiredLabels;
+    char                *name;
+    char                *source;
+    uint32_t             codeSegmentOffset;
+    uint32_t             exportedLabelsOffset;
+    uint32_t             requiredLabelsOffset;
+    uint32_t             originRelativeOffset;
+    labelList_t          labelList;
+    void                *codeSegment;
+    labelList_t          exportedLabels;
+    requiredLabelList_t  requiredLabels;
+    originRelativeList_t originRelatives;
     struct section_t *next;
 } section_t;
 
@@ -171,6 +186,9 @@ void                  freeResolutionInstanceListContents(resolutionInstanceList_
 requiredLabel_t *addNewRequiredLabel  (requiredLabelList_t *requiredLabelList);
 requiredLabel_t *getRequiredLabel     (requiredLabelList_t *requiredLabelList, char *name);
 void             freeRequiredLabelList(requiredLabelList_t *requiredLabelList);
+
+originRelative_t *addNewOriginRelative  (originRelativeList_t *originRelativeList);
+void              freeOriginRelativeList(originRelativeList_t *originRelativeList);
 
 section_t *addNewSection          (sectionList_t *sectionList);
 section_t *getSection             (sectionList_t *sectionList, char *name);

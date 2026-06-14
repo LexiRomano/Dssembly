@@ -7,12 +7,13 @@ static char *outputFileName = NULL;
 
 static bool link = false;
 
-static sectionList_t        sectionList           = {0};
-static section_t           *currentSection        = NULL;
-static labelList_t         *currentLabelList      = NULL;
-static labelList_t         *currentExportedLabels = NULL;
-static requiredLabelList_t *currentRequiredLabels = NULL;
-static aliasList_t          aliasList             = {0};
+static sectionList_t         sectionList            = {0};
+static section_t            *currentSection         = NULL;
+static labelList_t          *currentLabelList       = NULL;
+static labelList_t          *currentExportedLabels  = NULL;
+static requiredLabelList_t  *currentRequiredLabels  = NULL;
+static originRelativeList_t *currentOriginRelatives = NULL;
+static aliasList_t           aliasList              = {0};
 
 static instructionDescriptor_t instructionDescriptors[] =
 {// instructionStr 
@@ -924,6 +925,19 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
             *address += buf32;
             return true;
         }
+        
+        if (1   == strlen(tokens->tokens[1]) &&
+            '@' == tokens->tokens[1][0])
+        {
+            if (NULL == currentSection)
+            {
+                printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
+                return false;
+            }
+
+            *address += 4;
+            return true;
+        }
 
         if (false == parseLiteral(tokens->tokens[1], &buf32))
         {
@@ -966,9 +980,10 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
                                       tokens->tokens[1]);
         *address = 0;
 
-        currentLabelList = &(currentSection->labelList);
-        currentExportedLabels = &(currentSection->exportedLabels);
-        currentRequiredLabels = &(currentSection->requiredLabels);
+        currentLabelList       = &(currentSection->labelList);
+        currentExportedLabels  = &(currentSection->exportedLabels);
+        currentRequiredLabels  = &(currentSection->requiredLabels);
+        currentOriginRelatives = &(currentSection->originRelatives);
 
         return true;
     }
@@ -1060,6 +1075,8 @@ static bool completeSection()
 {
     char nullChar = '\0';
 
+    // Exported labels
+
     currentSection->exportedLabelsOffset = ftell(outputFile);
 
     for (label_t *tmpExport = currentExportedLabels->first;
@@ -1079,6 +1096,8 @@ static bool completeSection()
         printf("Error writing to \"%s\"\n", outputFileName);
         return false;
     }
+
+    // Required labels
 
     currentSection->requiredLabelsOffset = ftell(outputFile);
 
@@ -1112,17 +1131,41 @@ static bool completeSection()
         return false;
     }
 
+    // Origin relatives
+
+    currentSection->originRelativeOffset = ftell(outputFile);
+
+    if (1 != fwrite(&(currentOriginRelatives->count), 2, 1, outputFile))
+    {
+        printf("Error writing to \"%s\"\n", outputFileName);
+        return false;
+    }
+
+    for (originRelative_t *tmpOR = currentOriginRelatives->first;
+         NULL != tmpOR;
+         tmpOR = tmpOR->next)
+    {
+        if (1 != fwrite(&(tmpOR->address), 4, 1, outputFile))
+        {
+            printf("Error writing to \"%s\"\n", outputFileName);
+            return false;
+        }
+    }
+
     return true;
 }
 
 static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uint32_t lineNumber)
 {
-    uint32_t reserveSize     = 0;
-    uint32_t setValue        = 0;
-    uint16_t buf16           = 0;
-    uint8_t  buf8            = 0;
-    int      rc              = 0;
-    char    *parsedSetString = NULL;
+    uint32_t              reserveSize     = 0;
+    uint32_t              setValue        = 0;
+    uint16_t              buf16           = 0;
+    uint8_t               buf8            = 0;
+    int                   rc              = 0;
+    char                 *parsedSetString = NULL;
+    label_t              *tmpLbl          = NULL;
+    requiredLabel_t      *tmpReqLbl       = NULL;
+    resolutionInstance_t *tmpResInst      = NULL;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -1195,6 +1238,64 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
                 return false;
             }
             free(parsedSetString);
+            return true;
+        }
+
+        if (1   == strlen(tokens->tokens[1]) &&
+            '@' == tokens->tokens[1][0])
+        {
+            if (NULL == currentSection)
+            {
+                printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
+                return false;
+            }
+
+            if (link)
+            {
+                tmpLbl = getLabel(currentLabelList, tokens->tokens[2]);
+
+                if (NULL != tmpLbl)
+                {
+                    // Add an origin relative entry
+                    addNewOriginRelative(currentOriginRelatives)->address = *address;
+                    if (false == fwrite(&(tmpLbl->address), 4, 1, outputFile))
+                    {
+                        printf("Error writing to \"%s\"\n", outputFileName);
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                tmpReqLbl = getRequiredLabel(currentRequiredLabels, tokens->tokens[2]);
+
+                if (NULL == tmpReqLbl)
+                {
+                    printf("%s:%u: could not resolve label\n", inputFileName, lineNumber);
+                    return false;
+                }
+
+                tmpResInst = addNewResolutionInstance(&(tmpReqLbl->instances));
+                tmpResInst->instructionOffset = *address;
+                tmpResInst->injectionOffset   = 0x80;
+            }
+            else
+            {
+                tmpLbl = getLabel(currentLabelList, tokens->tokens[2]);
+
+                if (NULL == tmpLbl)
+                {
+                    printf("%s:%u: could not resolve label\n", inputFileName, lineNumber);
+                    return false;
+                }
+
+                if (1 != fwrite(&(tmpLbl->address), 4, 1, outputFile))
+                {
+                    printf("Error writing to \"%s\"\n", outputFileName);
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -1280,9 +1381,10 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
         currentSection->codeSegmentOffset = ftell(outputFile);
 
         *address = 0;
-        currentLabelList = &(currentSection->labelList);
-        currentExportedLabels = &(currentSection->exportedLabels);
-        currentRequiredLabels = &(currentSection->requiredLabels);
+        currentLabelList       = &(currentSection->labelList);
+        currentExportedLabels  = &(currentSection->exportedLabels);
+        currentRequiredLabels  = &(currentSection->requiredLabels);
+        currentOriginRelatives = &(currentSection->originRelatives);
 
         return true;
     }
@@ -1622,9 +1724,10 @@ static bool firstPass()
     {
         currentSection = addNewSection(&sectionList);
 
-        currentLabelList      = &(currentSection->labelList);
-        currentExportedLabels = &(currentSection->exportedLabels);
-        currentRequiredLabels = &(currentSection->requiredLabels);
+        currentLabelList       = &(currentSection->labelList);
+        currentExportedLabels  = &(currentSection->exportedLabels);
+        currentRequiredLabels  = &(currentSection->requiredLabels);
+        currentOriginRelatives = &(currentSection->originRelatives);
     }
 
     while (fgets(inputBuffer, 2048, inputFile))
@@ -1733,7 +1836,7 @@ static bool secondPass()
             }
 
             // Reserve space for pointers
-            if (3 != fwrite(inputBuffer, 4, 3, outputFile))
+            if (4 != fwrite(inputBuffer, 4, 4, outputFile))
             {
                 printf("Error writing to \"%s\"\n", outputFileName);
                 return false;
@@ -1807,7 +1910,8 @@ static bool secondPass()
             if (0 != fseek(outputFile, strlen(currentSection->name) + 1, SEEK_CUR) ||
                 1 != fwrite(&(currentSection->codeSegmentOffset),    4, 1, outputFile) ||
                 1 != fwrite(&(currentSection->exportedLabelsOffset), 4, 1, outputFile) ||
-                1 != fwrite(&(currentSection->requiredLabelsOffset), 4, 1, outputFile))
+                1 != fwrite(&(currentSection->requiredLabelsOffset), 4, 1, outputFile) ||
+                1 != fwrite(&(currentSection->originRelativeOffset), 4, 1, outputFile))
             {
                 printf("Error writing to \"%s\"\n", outputFileName);
                 return false;

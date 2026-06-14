@@ -281,6 +281,57 @@ void freeRequiredLabelList(requiredLabelList_t *requiredLabelList)
     requiredLabelList->last  = NULL;
 }
 
+originRelative_t *addNewOriginRelative(originRelativeList_t *originRelativeList)
+{
+    if (NULL == originRelativeList)
+    {
+        return NULL;
+    }
+
+    if (NULL == originRelativeList->first)
+    {
+        originRelativeList->first = calloc(1, sizeof(originRelative_t));
+        originRelativeList->last = originRelativeList->first;
+
+        originRelativeList->count = 1;
+        return originRelativeList->last;
+    }
+
+    if (NULL == originRelativeList->last)
+    {
+        return NULL;
+    }
+
+    originRelativeList->last->next = calloc(1, sizeof(originRelative_t));
+    originRelativeList->last = originRelativeList->last->next;
+    originRelativeList->count++;
+
+    return originRelativeList->last;
+}
+
+void freeOriginRelativeList(originRelativeList_t *originRelativeList)
+{
+    originRelative_t *current = NULL;
+    originRelative_t *next    = NULL;
+
+    if (NULL == originRelativeList)
+    {
+        return;
+    }
+
+    current = originRelativeList->first;
+    while (NULL != current)
+    {
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    originRelativeList->first = NULL;
+    originRelativeList->last  = NULL;
+    originRelativeList->count = 0;
+}
+
 section_t *addNewSection(sectionList_t *sectionList)
 {
     if (NULL == sectionList)

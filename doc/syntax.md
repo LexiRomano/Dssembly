@@ -100,7 +100,23 @@ Sets are similar to reservations, but they also initialize the memory to a given
     LOAD G0 anotherVariable
 ```
 
-Sets can also be used to store null-terminated strings as such:
+Sets can also be used to store the 4-byte address of a label relative to the program's origin as such:
+
+```
+// At the very top of the first section:
+:origin
+// ...
+
+    GETABS    OA origin
+    GETREL-OA someFunction
+    BRAL-P    someFunction
+.set @ someFunction
+
+:someFunction
+    // ...
+```
+
+Finally, sets can be used to store null-terminated strings as such:
 
 ```
 :programName

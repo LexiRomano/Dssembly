@@ -144,6 +144,36 @@ static bool extractRequiredLabels(FILE *fd, section_t *section)
     return true;
 }
 
+static bool extractOriginRelatives(FILE *fd, section_t *section)
+{
+    uint32_t          restore = 0;
+    originRelative_t *tmpOR   = NULL;
+
+    restore = ftell(fd);
+    fseek(fd, section->originRelativeOffset, SEEK_SET);
+
+    if (1 != fread(&(section->originRelatives.count), 2, 1, fd))
+    {
+        LINK_ERROR("failed to parse object file \"%s\"", section->source);
+        return false;
+    }
+
+    for (uint32_t i = 0; i < section->originRelatives.count; i++)
+    {
+        tmpOR = addNewOriginRelative(&(section->originRelatives));
+
+        if (1 != fread(&(tmpOR->address), 4, 1, fd))
+        {
+            LINK_ERROR("failed to parse object file \"%s\"", section->source);
+            return false;
+        }
+    }
+
+    fseek(fd, restore, SEEK_SET);
+
+    return true;
+}
+
 static bool extractRequiredSections(dinkerConfig_t *config, char *fileName, sectionList_t *out)
 {
     FILE      *fd                     = NULL;
@@ -213,7 +243,8 @@ static bool extractRequiredSections(dinkerConfig_t *config, char *fileName, sect
 
         if (1 != fread(&(newSection->codeSegmentOffset),    sizeof(uint32_t), 1, fd) ||
             1 != fread(&(newSection->exportedLabelsOffset), sizeof(uint32_t), 1, fd) ||
-            1 != fread(&(newSection->requiredLabelsOffset), sizeof(uint32_t), 1, fd))
+            1 != fread(&(newSection->requiredLabelsOffset), sizeof(uint32_t), 1, fd) ||
+            1 != fread(&(newSection->originRelativeOffset), sizeof(uint32_t), 1, fd))
         {
             fclose(fd);
             LINK_ERROR("failed to read from %s", fileName);
@@ -221,9 +252,10 @@ static bool extractRequiredSections(dinkerConfig_t *config, char *fileName, sect
         }
 
         // Extract segment data
-        if (false == extractCodeSegment   (fd, newSection) ||
-            false == extractExportedLabels(fd, newSection) ||
-            false == extractRequiredLabels(fd, newSection))
+        if (false == extractCodeSegment    (fd, newSection) ||
+            false == extractExportedLabels (fd, newSection) ||
+            false == extractRequiredLabels (fd, newSection) ||
+            false == extractOriginRelatives(fd, newSection))
         {
             fclose(fd);
             return false;
@@ -330,7 +362,7 @@ static bool output(dinkerConfig_t *config, sectionList_t *sections)
         return false;
     }
 
-    out = fopen(config->outputFile, "wb");
+    out = fopen(config->outputFile, "wb+");
 
     if (NULL == out)
     {
@@ -366,10 +398,13 @@ static bool output(dinkerConfig_t *config, sectionList_t *sections)
         }
     }
 
-    // Resolve labels
+    // Resolve labels and origin relatives
     for (section_t *sec = sections->first; sec != NULL; sec = sec->next)
     {
-        for (requiredLabel_t *reqLbl = sec->requiredLabels.first; reqLbl != NULL; reqLbl = reqLbl->next)
+        // Labels
+        for (requiredLabel_t *reqLbl = sec->requiredLabels.first;
+             NULL != reqLbl;
+             reqLbl = reqLbl->next)
         {
             if (false == findExportedLabel(reqLbl->name,
                                            sections,
@@ -389,9 +424,16 @@ static bool output(dinkerConfig_t *config, sectionList_t *sections)
             {
                 instructionOffset = resI->instructionOffset + sec->codeSegmentOffset;
 
-                fseek(out, instructionOffset + resI->injectionOffset, SEEK_SET);
+                fseek(out, instructionOffset + (resI->injectionOffset & 0x7F), SEEK_SET);
 
-                writeVal = foundLabelOffset - instructionOffset;
+                if (0 != (resI->injectionOffset & 0x80))
+                {
+                    writeVal = foundLabelOffset;
+                }
+                else
+                {
+                    writeVal = foundLabelOffset - instructionOffset;
+                }
 
                 if (1 != fwrite(&writeVal, sizeof(uint32_t), 1, out))
                 {
@@ -400,6 +442,35 @@ static bool output(dinkerConfig_t *config, sectionList_t *sections)
                     remove(config->outputFile);
                     return false;
                 }
+            }
+        }
+
+        // Origin relatives
+        for (originRelative_t *orRel = sec->originRelatives.first;
+             NULL != orRel;
+             orRel = orRel->next)
+        {
+            fseek(out, section->codeSegmentOffset + orRel->address, SEEK_SET);
+
+            if (1 != fread(&writeVal, sizeof(uint32_t), 1, out))
+            {
+                INTERNAL_ERROR;
+                LINK_ERROR("could not write to \"%s\"", config->outputFile);
+                fclose(out);
+                remove(config->outputFile);
+                return false;
+            }
+
+            writeVal += section->codeSegmentOffset;
+
+            fseek(out, -4, SEEK_CUR);
+
+            if (1 != fwrite(&writeVal, sizeof(uint32_t), 1, out))
+            {
+                LINK_ERROR("could not write to \"%s\"", config->outputFile);
+                fclose(out);
+                remove(config->outputFile);
+                return false;
             }
         }
     }
