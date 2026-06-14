@@ -274,7 +274,11 @@ GETABS-<addressingMode> dest address
 // target rather than the target itself. `address` is the address to consider.
 // It can be a register, immediate value, or label. `dest` is where to store
 // the calculated memory address. `addressingMode` is what addressing mode
-// to consider (see section below).
+// to consider (see section below). The ABS addressing mode is not supported.
+
+GETREL-<addressingMode> dest address
+// Works the same as except it returns an address which can be resolved relative
+// to the selected offset register. Addressing mode must be an offset register.
 
 TERM
 // Terminates the execution of the processor. No arugments.
