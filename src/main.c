@@ -3,6 +3,7 @@
 bool argHelp = false;
 bool argRaw  = false;
 bool argKeep = false;
+bool argObj  = false;
 
 char *argRawInputFile  = NULL;
 char *argRawOutputFile = NULL;
@@ -14,9 +15,11 @@ static void printHelp()
     printf("       dssembly configFile.dfg\n");
     printf("\n");
     printf("Options:\n");
-    printf("    -r      Raw mode, assembles a single file into binary without the dinker, else\n");
-    printf("            run in linked mode\n");
+    printf("    -r      Raw mode, assembles a single file into binary without the dinker,\n");
+    printf("            else run in linked mode\n");
     printf("    -k      Keep the temporary directory\n");
+    printf("    -o      Stop at object files, do not link. Output in temporary directory. -k\n");
+    printf("            option is implied\n");
     printf("    -h      Display this help and exit\n");
     printf("\n");
     printf("For more information, see <https://github.com/LexiRomano/Dssembly>\n");
@@ -76,82 +79,94 @@ static void removeTmpDirectory()
 
 static bool parseArgs(int argc, char *argv[])
 {
+    uint8_t fileCount = 0;
+
     if (1 == argc)
     {
         argHelp = true;
         return true;
     }
 
-    if ('-' == argv[1][0])
+    for (uint8_t i = 1; i < argc; i++)
     {
-        for (uint8_t i = 1; argv[1][i] != '\0'; i++)
+        if ('-' == argv[i][0])
         {
-            switch (argv[1][i])
+            for (uint8_t j = 1; argv[i][j] != '\0'; j++)
             {
-                case 'r':
+                switch (argv[i][j])
                 {
-                    argRaw = true;
-                    break;
-                }
-                case 'h':
-                {
-                    argHelp = true;
-                    break;
-                }
-                case 'k':
-                {
-                    argKeep = true;
-                    break;
+                    case 'r':
+                    {
+                        argRaw = true;
+                        break;
+                    }
+                    case 'h':
+                    {
+                        argHelp = true;
+                        break;
+                    }
+                    case 'k':
+                    {
+                        argKeep = true;
+                        break;
+                    }
+                    case 'o':
+                    {
+                        argObj  = true;
+                        argKeep = true;
+                        break;
+                    }
                 }
             }
+
+            if (argHelp)
+            {
+                return true;
+            }
+
+            continue;
         }
 
-        if (argHelp)
+        if (0 == fileCount)
         {
-            return true;
+            argRawInputFile  = argv[i];
+        }
+        else if (1 == fileCount)
+        {
+            argRawOutputFile = argv[i];
         }
 
-        if (argRaw)
-        {
-            if (argc > 4)
-            {
-                printf("Too many arguments for raw mode\n");
-                return false;
-            }
-            if (argc < 4)
-            {
-                printf("Too few arguments for raw mode\n");
-                return false;
-            }
+        fileCount++;
+    }
 
-            argRawInputFile  = argv[2];
-            argRawOutputFile = argv[3];
+    if (argRaw)
+    {
+        if (fileCount > 2)
+        {
+            printf("Too many arguments for raw mode\n");
+            return false;
         }
-        else
+        if (fileCount < 2)
         {
-            if (argc > 3)
-            {
-                printf("Too many arguments for linked mode\n");
-                return false;
-            }
-            if (argc < 3)
-            {
-                printf("Too few arguments for linked mode\n");
-                return false;
-            }
-
-            argConfigFile = argv[2];
+            printf("Too few arguments for raw mode\n");
+            return false;
         }
     }
     else
     {
-        if (argc > 2)
+        if (fileCount > 1)
         {
             printf("Too many arguments for linked mode\n");
             return false;
         }
+        if (fileCount < 0)
+        {
+            printf("Too few arguments for linked mode\n");
+            return false;
+        }
 
-        argConfigFile = argv[1];
+        argConfigFile = argRawInputFile;
+        argRawInputFile = NULL;
     }
 
     return true;
@@ -249,11 +264,12 @@ static bool parseConfigFile(dinkerConfig_t **config)
             continue;
         }
 
-        if (0 == strncmp(tokens.tokens[0], DINKER_CONFIG_SOURCE, strlen(DINKER_CONFIG_SOURCE)))
+        if (0 == strncmp(tokens.tokens[0], DINKER_CONFIG_SOURCE, strlen(DINKER_CONFIG_SOURCE)) ||
+            0 == strncmp(tokens.tokens[0], DINKER_CONFIG_OBJECT, strlen(DINKER_CONFIG_OBJECT)))
         {
             if (2 != tokens.tokenCount)
             {
-                printf("%s:%u: source requires one file path argument\n", argConfigFile, lineNumber);
+                printf("%s:%u: source/object requires one file path argument\n", argConfigFile, lineNumber);
                 free(newConfig);
                 freeTokensContents(&tokens);
                 fclose(configFile);
@@ -342,12 +358,17 @@ static bool parseConfigFile(dinkerConfig_t **config)
 
         if (0 == strncmp(tokens.tokens[0], DINKER_CONFIG_SOURCE, strlen(DINKER_CONFIG_SOURCE)))
         {
-            newConfig->inputFiles[sourceIndex].sourceName =
-                    strcpy(calloc(strlen(tokens.tokens[1]) + 1, sizeof(char*)), tokens.tokens[1]);
+            newConfig->inputFiles[sourceIndex].sourceName = strdup(tokens.tokens[1]);
 
             newConfig->inputFiles[sourceIndex].objectName =
                     convertToObjectName(newConfig->inputFiles[sourceIndex].sourceName,
                                         lineNumber);
+
+            sourceIndex++;
+        }
+        else if (0 == strncmp(tokens.tokens[0], DINKER_CONFIG_OBJECT, strlen(DINKER_CONFIG_OBJECT)))
+        {
+            newConfig->inputFiles[sourceIndex].objectName = strdup(tokens.tokens[1]);
 
             sourceIndex++;
         }
@@ -408,9 +429,13 @@ int main(int argc, char *argv[])
     success = true;
     for (uint8_t i = 0; i < config->inputFileCount; i++)
     {
-        success &= dssembler(config->inputFiles[i].sourceName,
-                             config->inputFiles[i].objectName,
-                             true);
+        // Don't dssemble object files
+        if (NULL != config->inputFiles[i].sourceName)
+        {
+            success &= dssembler(config->inputFiles[i].sourceName,
+                                 config->inputFiles[i].objectName,
+                                 true);
+        }
     }
 
     if (false == success)
@@ -425,7 +450,10 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    success = dinker(config);
+    if (false == argObj)
+    {
+        success = dinker(config);
+    }
 
     if (false == argKeep)
     {

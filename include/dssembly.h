@@ -8,6 +8,7 @@
 
 #define TEMP_DIR_NAME "dTemp"
 #define DINKER_CONFIG_SOURCE ".source"
+#define DINKER_CONFIG_OBJECT ".object"
 #define DINKER_CONFIG_OUT    ".out"
 #define DINKER_DEFAULT_OUT   "out.bin"
 #define DINKER_OBJECT_EXT    ".dob"
