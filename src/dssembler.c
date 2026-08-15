@@ -1728,6 +1728,8 @@ static bool firstPass()
     int      rc                = 0;
     tokens_t tokens            = {0};
 
+    currentSection = NULL;
+
     if (false == link)
     {
         currentSection = addNewSection(&sectionList);
@@ -1941,6 +1943,7 @@ static void teardown()
 {
     freeSectionListContents(&sectionList);
     freeAliasListContents(&aliasList);
+    currentSection = NULL;
 }
 
 bool dssembler(char *in, char *out, bool linkedMode)
