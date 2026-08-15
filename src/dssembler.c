@@ -704,14 +704,13 @@ static bool parseLabel(char *labelWithoutColon, uint32_t lineNumber, uint32_t ad
     return true;
 }
 
-static bool parseAlias(tokens_t *tokens, char *fileName, uint32_t lineNumber)
+static bool parseAliasDefine(tokens_t *tokens, char *fileName, uint32_t lineNumber)
 {
-    uint32_t buf32    = 0;
     alias_t *newAlias = NULL;
 
     if (tokens->tokenCount != 3)
     {
-        printf("%s:%u: alias requires two arguments\n", fileName, lineNumber);
+        printf("%s:%u: define requires two arguments\n", fileName, lineNumber);
         return false;
     }
 
@@ -733,12 +732,6 @@ static bool parseAlias(tokens_t *tokens, char *fileName, uint32_t lineNumber)
         return false;
     }
 
-    if (false == parseLiteral(tokens->tokens[2], &buf32))
-    {
-        printf("%s:%u: could not parse literal \"%s\"\n", fileName, lineNumber, tokens->tokens[2]);
-        return false;
-    }
-
     newAlias = addNewAlias(&aliasList);
 
     if (NULL == newAlias)
@@ -747,8 +740,21 @@ static bool parseAlias(tokens_t *tokens, char *fileName, uint32_t lineNumber)
         return false;
     }
 
-    newAlias->alias  = strcpy(calloc(strlen(tokens->tokens[1]) + 1, sizeof(char)), tokens->tokens[1]);
-    newAlias->value = buf32;
+    newAlias->alias     = strdup(tokens->tokens[1]);
+    newAlias->expansion = strdup(tokens->tokens[2]);
+
+    return true;
+}
+
+static bool parseAliasUndef(tokens_t *tokens, char *fileName, uint32_t lineNumber)
+{
+    if (tokens->tokenCount != 2)
+    {
+        printf("%s:%u: undef requires two arguments\n", fileName, lineNumber);
+        return false;
+    }
+
+    removeAlias(&aliasList, tokens->tokens[1]);
 
     return true;
 }
@@ -798,16 +804,25 @@ static bool doInclude(tokens_t *tokens, uint32_t lineNumber)
             continue;
         }
 
-        if (0 != strcmp(fileTokens.tokens[0], ALIAS_STR))
+        if (0 == strcmp(fileTokens.tokens[0], DEFINE_STR))
         {
-            continue;
+            if (false == parseAliasDefine(&fileTokens, tokens->tokens[1], fileLineNumber))
+            {
+                freeTokensContents(&fileTokens);
+                return false;
+            }
         }
-
-        if (false == parseAlias(&fileTokens, tokens->tokens[1], fileLineNumber))
+        else if (0 == strcmp(fileTokens.tokens[0], UNDEF_STR))
         {
-            return false;
+            if (false == parseAliasUndef(&fileTokens, tokens->tokens[1], fileLineNumber))
+            {
+                freeTokensContents(&fileTokens);
+                return false;
+            }
         }
     }
+
+    freeTokensContents(&fileTokens);
 
     return true;
 }
@@ -868,10 +883,17 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
         return false;
     }
 
-    if (0 == strcmp(tokens->tokens[0], ALIAS_STR))
+    if (0 == strcmp(tokens->tokens[0], DEFINE_STR))
     {
-        return parseAlias(tokens, inputFileName, lineNumber);
+        return parseAliasDefine(tokens, inputFileName, lineNumber);
     }
+
+    if (0 == strcmp(tokens->tokens[0], UNDEF_STR))
+    {
+        return parseAliasUndef(tokens, inputFileName, lineNumber);
+    }
+
+    resolveAliases(&aliasList, tokens);
 
     if (0 == strcmp(tokens->tokens[0], INCLUDE_STR))
     {
@@ -1174,14 +1196,21 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
         return true;
     }
 
-    if (0 == strcmp(tokens->tokens[0], ALIAS_STR))
+    if (0 == strcmp(tokens->tokens[0], DEFINE_STR))
     {
-        return true;
+        return parseAliasDefine(tokens, inputFileName, lineNumber);
     }
+
+    if (0 == strcmp(tokens->tokens[0], UNDEF_STR))
+    {
+        return parseAliasUndef(tokens, inputFileName, lineNumber);
+    }
+
+    resolveAliases(&aliasList, tokens);
 
     if (0 == strcmp(tokens->tokens[0], INCLUDE_STR))
     {
-        return true;
+        return doInclude(tokens, lineNumber);
     }
 
     if (0 == strcmp(tokens->tokens[0], RESERVE_STR))
@@ -1415,7 +1444,6 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
     form_e   form               = 0;
     char    *literalArgument    = NULL;
     label_t *label              = NULL;
-    alias_t *alias              = NULL;
     uint32_t literalValue       = 0;
 
     if (NULL == tokens         ||
@@ -1533,19 +1561,10 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
 
         if (NULL == label)
         {
-            alias = getAlias(&aliasList, literalArgument);
-
-            if (NULL == alias)
+            if (false == parseLiteral(literalArgument, &literalValue))
             {
-                if (false == parseLiteral(literalArgument, &literalValue))
-                {
-                    printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
-                    return false;
-                }
-            }
-            else
-            {
-                literalValue = alias->value;
+                printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
+                return false;
             }
         }
         else
@@ -1583,8 +1602,7 @@ static bool parseArgumentAugment(tokens_t                *tokens,
                                  uint32_t                 lineNumber)
 {
     char                 *literalArgument    = NULL;
-    label_t              *label              = 0;
-    alias_t              *alias              = 0;
+    label_t              *label              = NULL;
     requiredLabel_t      *requiredLabel      = NULL;
     resolutionInstance_t *resolutionInstance = NULL;
     uint32_t              literalValue       = 0;
@@ -1595,38 +1613,28 @@ static bool parseArgumentAugment(tokens_t                *tokens,
 
     if (NULL == label)
     {
-        alias = getAlias(&aliasList, literalArgument);
-
-        if (NULL == alias)
+        if (false == parseLiteral(literalArgument, &literalValue))
         {
-            if (false == parseLiteral(literalArgument, &literalValue))
+            if (false == link)
             {
-                if (false == link)
-                {
-                    printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
-                    return false;
-                }
-                
-                requiredLabel = getRequiredLabel(currentRequiredLabels, literalArgument);
+                printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
+                return false;
+            }
+            
+            requiredLabel = getRequiredLabel(currentRequiredLabels, literalArgument);
 
-                if (NULL == requiredLabel)
-                {
-                    printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
-                    return false;
-                }
-
-                resolutionInstance = addNewResolutionInstance(&(requiredLabel->instances));
-
-                resolutionInstance->instructionOffset = address;
-
-                resolutionInstance->injectionOffset =
-                        descriptor->hasInstructionAugment ? 5 : 4;
+            if (NULL == requiredLabel)
+            {
+                printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
+                return false;
             }
 
-        }
-        else
-        {
-            literalValue = alias->value;
+            resolutionInstance = addNewResolutionInstance(&(requiredLabel->instances));
+
+            resolutionInstance->instructionOffset = address;
+
+            resolutionInstance->injectionOffset =
+                    descriptor->hasInstructionAugment ? 5 : 4;
         }
     }
     else
@@ -1782,6 +1790,8 @@ static bool firstPass()
             continue;
         }
 
+        resolveAliases(&aliasList, &tokens);
+
         if (NULL == currentSection)
         {
             printf("%s:%u instruction not in section\n", inputFileName, lineNumber);
@@ -1811,6 +1821,8 @@ static bool secondPass()
     tokens_t tokens            = {0};
     uint32_t lineNumber        = 0;
     uint32_t address           = 0;
+
+    freeAliasListContents(&aliasList);
 
     if (link)
     {
@@ -1889,6 +1901,8 @@ static bool secondPass()
 
             continue;
         }
+
+        resolveAliases(&aliasList, &tokens);
 
         if (false == parseInstruction(&tokens, &address, lineNumber))
         {

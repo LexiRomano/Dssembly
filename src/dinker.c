@@ -197,6 +197,16 @@ static bool extractRequiredSections(dinkerConfig_t *config, char *fileName, sect
         return false;
     }
 
+    fseek(fd, 0, SEEK_END);
+
+    if (0 == ftell(fd))
+    {
+        fclose(fd);
+        return true;
+    }
+
+    fseek(fd, 0, SEEK_SET);
+
     while (true)
     {
         // Extract the name
@@ -289,6 +299,11 @@ static bool extractAllRequiredSections(dinkerConfig_t *config, sectionList_t *se
         if (false == extractRequiredSections(config, config->inputFiles[i].objectName, &tmpSectionList))
         {
             return false;
+        }
+
+        if (NULL == tmpSectionList.first)
+        {
+            continue;
         }
 
         // Ensure no duplicate section names

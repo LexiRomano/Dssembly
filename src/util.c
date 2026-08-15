@@ -127,6 +127,101 @@ alias_t *getAlias(aliasList_t *aliasList, char *name)
     return NULL;
 }
 
+void removeAlias(aliasList_t *aliasList, char *name)
+{
+    alias_t *cur = NULL;
+    alias_t *nxt = NULL;
+
+    if (NULL == aliasList ||
+        NULL == name)
+    {
+        return;
+    }
+
+    cur = aliasList->first;
+
+    if (NULL == cur)
+    {
+        return;
+    }
+
+    if (0 == strcmp(name, cur->alias))
+    {
+        aliasList->first = cur->next;
+        if (aliasList->last == cur)
+        {
+            aliasList->last = NULL;
+        }
+        if (NULL != cur->alias)
+        {
+            free(cur->alias);
+        }
+        if (NULL != cur->expansion)
+        {
+            free(cur->expansion);
+        }
+        free(cur);
+        return;
+    }
+
+    while (cur != NULL)
+    {
+        nxt = cur->next;
+
+        if (0 == strcmp(name, nxt->alias))
+        {
+            cur->next = nxt->next;
+            if (aliasList->last == nxt)
+            {
+                aliasList->last = cur;
+            }
+            if (NULL != cur->alias)
+            {
+                free(cur->alias);
+            }
+            if (NULL != cur->expansion)
+            {
+                free(cur->expansion);
+            }
+            free(nxt);
+            return;
+        }
+
+        cur = nxt;
+    }
+}
+
+void resolveAliases(aliasList_t *aliasList, tokens_t *tokens)
+{
+    char **currentToken = NULL;
+
+    if (NULL == aliasList ||
+        NULL == tokens)
+    {
+        return;
+    }
+
+    for (int t = 0; t < tokens->tokenCount; t++)
+    {
+        currentToken = &tokens->tokens[t];
+
+        if (NULL == *currentToken)
+        {
+            continue;
+        }
+
+        for (alias_t *a = aliasList->first; NULL != a; a = a->next)
+        {
+            if (0 == strcmp(*currentToken, a->alias))
+            {
+                free(*currentToken);
+                *currentToken = strdup(a->expansion);
+                break;
+            }
+        }
+    }
+}
+
 void freeAliasListContents(aliasList_t *aliasList)
 {
     alias_t *current = NULL;
@@ -143,6 +238,10 @@ void freeAliasListContents(aliasList_t *aliasList)
         if (NULL != current->alias)
         {
             free(current->alias);
+        }
+        if (NULL != current->expansion)
+        {
+            free(current->expansion);
         }
 
         next = current->next;

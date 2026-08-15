@@ -15,7 +15,8 @@
 
 #define MAX_TOKENS 8
 #define COMMENT_PREFIX "//"
-#define ALIAS_STR      ".alias"
+#define DEFINE_STR     ".define"
+#define UNDEF_STR      ".undef"
 #define INCLUDE_STR    ".include"
 #define RESERVE_STR    ".reserve"
 #define SET_STR        ".set"
@@ -123,7 +124,7 @@ typedef struct
 typedef struct alias_t
 {
     char           *alias;
-    uint32_t        value;
+    char           *expansion;
     struct alias_t *next;
 } alias_t;
 
@@ -197,6 +198,8 @@ void       freeSectionListContents(sectionList_t *sectionList);
 
 alias_t *addNewAlias          (aliasList_t *aliasList);
 alias_t *getAlias             (aliasList_t *aliasList, char *name);
+void     removeAlias          (aliasList_t *aliasList, char *name);
+void     resolveAliases       (aliasList_t *aliasList, tokens_t *tokens);
 void     freeAliasListContents(aliasList_t *aliasList);
 
 void freeTokensContents(tokens_t *tokens);
