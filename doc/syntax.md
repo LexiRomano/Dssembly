@@ -33,8 +33,10 @@ Labels are a portable way to reffer to certain parts of code. They can only be u
 
 ```
 :myLabel
-    bral myLabel
+    bralpc myLabel
 ```
+
+For portability, all instructions using a label as an address are enforced to use the PC relative addressing mode.
 
 ### Aliases
 
@@ -67,10 +69,10 @@ Include will define aliases defined in another file. Includes do not occur recur
 :loop
     loadcab  G2 G1
     comp     G2 TABLE_END
-    breq     break
+    breqpc   break
     addi     G0 G0 1
     addi     G1 G1 1
-    bral     loop
+    bralpc   loop
 
 :break
 
@@ -84,7 +86,7 @@ Reservations will leave a certain number of bytes as empty space between instruc
 :aVariable
     .reserve 4
 
-    storw aVariable
+    storwpc aVariable
 ```
 
 ### Set
@@ -95,7 +97,7 @@ Sets are similar to reservations, but they also initialize the memory to a given
 :anotherVariable
     .set 4 0x00008000
 
-    loadw G0 anotherVariable
+    loadwpc G0 anotherVariable
 ```
 
 Sets can also be used to store the 4-byte address of a label relative to the program's origin as such:
@@ -107,7 +109,7 @@ Sets can also be used to store the 4-byte address of a label relative to the pro
 
     getabs   OA origin
     getreloa someFunction
-    bpal     someFunction
+    bpalpc   someFunction
 .set @ someFunction
 
 :someFunction
@@ -125,10 +127,10 @@ Finally, sets can be used to store null-terminated strings as such:
 :printProgramName
     loadcoa G0 G1
     comp    G0 0
-    breq    done
+    breqpc  done
     bpal    print
     addi    G1 G1 1
-    bral    printProgramName
+    bralpc  printProgramName
 ```
 
 ### Section
@@ -155,7 +157,7 @@ The export defines a label for a given section to be used in other sections. The
 .requires print
     
     getabs G0 helloWorld
-    bpal   print
+    bpalpc print
 
 
 .section text
@@ -195,7 +197,7 @@ Loads a number from memory into a register. The source can be a register, litera
     - load***sc***x -> load a signed char (1 byte)
 - Addressing modes
     - loadx***ab*** -> load from an absolute address
-    - loadx         -> load relative to PC (used only with labels)
+    - loadx***pc*** -> load relative to PC (used only with labels)
     - loadx***oa*** -> load relative to OA
     - loadx***ob*** -> load relative to OB
     - loadx***oc*** -> load relative to OC
@@ -204,7 +206,7 @@ Examples:
 ```
 loadwab  G0 0x8000       // Loads 4 bytes from address 0x8000 into G0
 
-loadh    SP stackRestore // Loads 2 bytes from the stackRestore label into SP
+loadhpc  SP stackRestore // Loads 2 bytes from the stackRestore label into SP
 
 loadscoc G3 2            // Loads 1 signed byte from OC + 2 into G3
 
@@ -310,7 +312,7 @@ evaline G4 G4 0 // Basically simplifies G4 to a boolean. If it's zero, keep it a
 Branches to an address if a condition is satisfied. See `Branch Conditions` near the end of this document to see what conditions are supported. The address can be a register, literal, or label. There are several addressing modes supported to modify the destination address as such:
 
 - brx***ab*** -> Branch to the absolute address provided
-- brx         -> Branch to the address relative to PC (used only with labels)
+- brx***pc*** -> Branch to the address relative to PC (used only with labels)
 - brx***oa*** -> Branch to the address + OA
 - brx***ob*** -> Branch to the address + OB
 - brx***oc*** -> Branch to the address + OC
@@ -319,7 +321,7 @@ Examples:
 ```
 bralab 0x8000   // Unconditional branch to the absolute address 0x8000
 
-brcs   overflow // Branch to a label called overflow if the carry flag is set
+brcpc  overflow // Branch to a label called overflow if the carry flag is set
 
 breqoa 0x12     // Branch to oa + 0x12 if the last operation resulted in an equivalent comparison
 ```
@@ -428,14 +430,14 @@ This code will scan for certain devices and store their device data addresses fo
 :scanTop
     add      OA OA 8
     comp     OA 0x6100
-    breq     doneScan
+    breqpc   doneScan
     loadcoa  G0 1
     comp     G0 peripheralDeviceCode
-    breq     isPeripheral
+    breqpc   isPeripheral
     comp     G0 peripheralDeviceCode
-    breq     isStorage
+    breqpc   isStorage
     comp     G0 deviceRegistryEOT
-    breq     doneScan
+    breqpc   doneScan
     bral     scanTop
 
 
@@ -443,12 +445,12 @@ This code will scan for certain devices and store their device data addresses fo
     loadwoa  OB 4
     loadcob  G0 0
     comp     G0 serialTypeID
-    brne     scanTop
+    brnepc   scanTop
 
     // is serial port
     loadcob  G0 1
     comp     G0 derialProtocolID
-    brne     scanTop
+    brnepc   scanTop
 
     // is derial
     storwab  OB derialAddress
@@ -458,17 +460,17 @@ This code will scan for certain devices and store their device data addresses fo
     loadwoa  OB 4
     loadcob  G0 0
     comp     G0 dardriveManagerSPI
-    breq     isDardriveManager
+    breqpc   isDardriveManager
     comp     G0 dardriveDriveSPI
-    brne     scanTop
+    brnepc   scanTop
 
     // is dardrive drive
     storwab  OB dardriveDriveAddress
-    bral     scanTop
+    bralpc   scanTop
 
 :isDardriveManager
     storwab  OB dardriveManagerAddress
-    bral     scanTop
+    bralpc   scanTop
 
 :doneScan
     // Continue on to do something else
