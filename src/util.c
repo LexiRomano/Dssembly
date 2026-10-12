@@ -770,3 +770,44 @@ void freeDinkerConfigContents(dinkerConfig_t *config)
         config->sectionCount = 0;
     }
 }
+
+bool simpleRegex(char *template, char *target)
+{
+    if (NULL == template &&
+        NULL == target)
+    {
+        return true;
+    }
+
+    if (NULL == template ||
+        NULL == target)
+    {
+        return false;
+    }
+
+    int i = 0;
+    while (i < 1024)
+    {
+        if ('\0' == template[i] &&
+            '\0' == target[i])
+        {
+            return true;
+        }
+
+        if ('\0' == template[i] ||
+            '\0' == target[i])
+        {
+            return false;
+        }
+
+        if (template[i] != target[i] &&
+            '.'         != template[i])
+        {
+            return false;
+        }
+
+        i++;
+    }
+
+    return false;
+}

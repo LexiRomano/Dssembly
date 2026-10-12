@@ -1,9 +1,10 @@
 #include "dssembly.h"
 
-static FILE *inputFile      = NULL;
-static char *inputFileName  = NULL;
-static FILE *outputFile     = NULL;
-static char *outputFileName = NULL;
+static FILE    *inputFile      = NULL;
+static char    *inputFileName  = NULL;
+static FILE    *outputFile     = NULL;
+static char    *outputFileName = NULL;
+static uint32_t lineNumber     = 0;
 
 static bool link = false;
 
@@ -15,322 +16,23 @@ static requiredLabelList_t  *currentRequiredLabels  = NULL;
 static originRelativeList_t *currentOriginRelatives = NULL;
 static aliasList_t           aliasList              = {0};
 
+static instructionForm_e moveFormResolver(tokens_t *tokens);
+
+static int moveOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm);
+
+static instructionForm_e loadFormResolver(tokens_t *tokens);
+
+static int loadOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm);
+
 static instructionDescriptor_t instructionDescriptors[] =
-{// instructionStr 
-//                    opCodePrimaryVal 
-//                          primaryForm 
-//                                  hasAlternateForm 
-//                                         opCodeAlternateVal 
-//                                               alternateForm 
-//                                                       hasInstructionAugment 
-//                                                              instructionAugment 
-//                                                                    alternateFormUsesArgAugment 
-//                                                                           takesLabel
-    {"MOVE",          0x06, form_2, true,  0x07, form_5, false, 0,    false, false},
-    {"ADD",           0x18, form_1, true,  0x19, form_3, false, 0,    false, false},
-    {"SUB",           0x28, form_1, true,  0x29, form_3, false, 0,    false, false},
-    {"AND",           0x38, form_1, true,  0x39, form_3, false, 0,    false, false},
-    {"OR",            0x48, form_1, true,  0x49, form_3, false, 0,    false, false},
-    {"XOR",           0x58, form_1, true,  0x59, form_3, false, 0,    false, false},
-    {"NOT",           0x68, form_2, false, 0   , 0,      false, 0,    false, false},
-    {"BSLT",          0x78, form_1, true,  0x79, form_3, false, 0,    false, false},
-    {"BSRT",          0x88, form_1, true,  0x89, form_3, false, 0,    false, false},
-    {"BSLC",          0x98, form_1, true,  0x99, form_3, false, 0,    false, false},
-    {"BSRC",          0xA8, form_1, true,  0xA9, form_3, false, 0,    false, false},
-    {"COMP",          0x0A, form_2, true,  0x0B, form_4, false, 0,    true,  false},
-    {"PUSH",          0x0E, form_4, false, 0,    0,      false, 0,    false, false},
-    {"POP",           0x1E, form_4, false, 0,    0,      false, 0,    false, false},
-    {"PUSHALL",       0x2E, form_6, false, 0,    0,      false, 0,    false, false},
-    {"POPALL",        0x3E, form_6, false, 0,    0,      false, 0,    false, false},
-    {"PEEK",          0x4E, form_4, false, 0,    0,      false, 0,    false, false},
-    {"RETURN",        0x5E, form_6, false, 0,    0,      false, 0,    false, false},
-    {"INTSUS",        0x01, form_6, false, 0,    0,      false, 0,    false, false},
-    {"INTRES",        0x11, form_6, false, 0,    0,      false, 0,    false, false},
-    {"INTTRG",        0x21, form_4, true,  0x31, form_7, false, 0,    false, false},
-    {"INTFIN",        0x41, form_6, false, 0,    0,      false, 0,    false, false},
-    {"INTGPR",        0x51, form_4, false, 0,    0,      false, 0,    false, false},
-    {"INTGRA",        0x61, form_4, false, 0,    0,      false, 0,    false, false},
-    {"INTSRA",        0x71, form_4, false, 0,    0,      false, 0,    false, false},
-    {"LOAD",          0x02, form_2, true,  0x03, form_4, true,  0x80, true,  true},
-    {"LOAD-ABS",      0x02, form_2, true,  0x03, form_4, true,  0x00, true,  false},
-    {"LOAD-OA",       0x02, form_2, true,  0x03, form_4, true,  0x01, true,  false},
-    {"LOAD-OB",       0x02, form_2, true,  0x03, form_4, true,  0x02, true,  false},
-    {"LOAD-OC",       0x02, form_2, true,  0x03, form_4, true,  0x03, true,  false},
-    {"LOAD-W2S0",     0x02, form_2, true,  0x03, form_4, true,  0x84, true,  true},
-    {"LOAD-W2S0-ABS", 0x02, form_2, true,  0x03, form_4, true,  0x04, true,  false},
-    {"LOAD-W2S0-OA",  0x02, form_2, true,  0x03, form_4, true,  0x05, true,  false},
-    {"LOAD-W2S0-OB",  0x02, form_2, true,  0x03, form_4, true,  0x06, true,  false},
-    {"LOAD-W2S0-OC",  0x02, form_2, true,  0x03, form_4, true,  0x07, true,  false},
-    {"LOAD-W2S1",     0x02, form_2, true,  0x03, form_4, true,  0x94, true,  true},
-    {"LOAD-W2S1-ABS", 0x02, form_2, true,  0x03, form_4, true,  0x14, true,  false},
-    {"LOAD-W2S1-OA",  0x02, form_2, true,  0x03, form_4, true,  0x15, true,  false},
-    {"LOAD-W2S1-OB",  0x02, form_2, true,  0x03, form_4, true,  0x16, true,  false},
-    {"LOAD-W2S1-OC",  0x02, form_2, true,  0x03, form_4, true,  0x17, true,  false},
-    {"LOAD-W2S2",     0x02, form_2, true,  0x03, form_4, true,  0xA4, true,  true},
-    {"LOAD-W2S2-ABS", 0x02, form_2, true,  0x03, form_4, true,  0x24, true,  false},
-    {"LOAD-W2S2-OA",  0x02, form_2, true,  0x03, form_4, true,  0x25, true,  false},
-    {"LOAD-W2S2-OB",  0x02, form_2, true,  0x03, form_4, true,  0x26, true,  false},
-    {"LOAD-W2S2-OC",  0x02, form_2, true,  0x03, form_4, true,  0x27, true,  false},
-    {"LOAD-W1S0",     0x02, form_2, true,  0x03, form_4, true,  0x88, true,  true},
-    {"LOAD-W1S0-ABS", 0x02, form_2, true,  0x03, form_4, true,  0x08, true,  false},
-    {"LOAD-W1S0-OA",  0x02, form_2, true,  0x03, form_4, true,  0x09, true,  false},
-    {"LOAD-W1S0-OB",  0x02, form_2, true,  0x03, form_4, true,  0x0A, true,  false},
-    {"LOAD-W1S0-OC",  0x02, form_2, true,  0x03, form_4, true,  0x0B, true,  false},
-    {"LOAD-W1S1",     0x02, form_2, true,  0x03, form_4, true,  0x98, true,  true},
-    {"LOAD-W1S1-ABS", 0x02, form_2, true,  0x03, form_4, true,  0x18, true,  false},
-    {"LOAD-W1S1-OA",  0x02, form_2, true,  0x03, form_4, true,  0x19, true,  false},
-    {"LOAD-W1S1-OB",  0x02, form_2, true,  0x03, form_4, true,  0x1A, true,  false},
-    {"LOAD-W1S1-OC",  0x02, form_2, true,  0x03, form_4, true,  0x1B, true,  false},
-    {"LOAD-W1S2",     0x02, form_2, true,  0x03, form_4, true,  0xA8, true,  true},
-    {"LOAD-W1S2-ABS", 0x02, form_2, true,  0x03, form_4, true,  0x28, true,  false},
-    {"LOAD-W1S2-OA",  0x02, form_2, true,  0x03, form_4, true,  0x29, true,  false},
-    {"LOAD-W1S2-OB",  0x02, form_2, true,  0x03, form_4, true,  0x2A, true,  false},
-    {"LOAD-W1S2-OC",  0x02, form_2, true,  0x03, form_4, true,  0x2B, true,  false},
-    {"LOAD-W1S3",     0x02, form_2, true,  0x03, form_4, true,  0xB8, true,  true},
-    {"LOAD-W1S3-ABS", 0x02, form_2, true,  0x03, form_4, true,  0x38, true,  false},
-    {"LOAD-W1S3-OA",  0x02, form_2, true,  0x03, form_4, true,  0x39, true,  false},
-    {"LOAD-W1S3-OB",  0x02, form_2, true,  0x03, form_4, true,  0x3A, true,  false},
-    {"LOAD-W1S3-OC",  0x02, form_2, true,  0x03, form_4, true,  0x3B, true,  false},
-    {"STOR",          0x04, form_2, true,  0x05, form_4, true,  0x80, true,  true},
-    {"STOR-ABS",      0x04, form_2, true,  0x05, form_4, true,  0x00, true,  false},
-    {"STOR-OA",       0x04, form_2, true,  0x05, form_4, true,  0x01, true,  false},
-    {"STOR-OB",       0x04, form_2, true,  0x05, form_4, true,  0x02, true,  false},
-    {"STOR-OC",       0x04, form_2, true,  0x05, form_4, true,  0x03, true,  false},
-    {"STOR-W2S0",     0x04, form_2, true,  0x05, form_4, true,  0x84, true,  true},
-    {"STOR-W2S0-ABS", 0x04, form_2, true,  0x05, form_4, true,  0x04, true,  false},
-    {"STOR-W2S0-OA",  0x04, form_2, true,  0x05, form_4, true,  0x05, true,  false},
-    {"STOR-W2S0-OB",  0x04, form_2, true,  0x05, form_4, true,  0x06, true,  false},
-    {"STOR-W2S0-OC",  0x04, form_2, true,  0x05, form_4, true,  0x07, true,  false},
-    {"STOR-W2S1",     0x04, form_2, true,  0x05, form_4, true,  0x94, true,  true},
-    {"STOR-W2S1-ABS", 0x04, form_2, true,  0x05, form_4, true,  0x14, true,  false},
-    {"STOR-W2S1-OA",  0x04, form_2, true,  0x05, form_4, true,  0x15, true,  false},
-    {"STOR-W2S1-OB",  0x04, form_2, true,  0x05, form_4, true,  0x16, true,  false},
-    {"STOR-W2S1-OC",  0x04, form_2, true,  0x05, form_4, true,  0x17, true,  false},
-    {"STOR-W2S2",     0x04, form_2, true,  0x05, form_4, true,  0xA4, true,  true},
-    {"STOR-W2S2-ABS", 0x04, form_2, true,  0x05, form_4, true,  0x24, true,  false},
-    {"STOR-W2S2-OA",  0x04, form_2, true,  0x05, form_4, true,  0x25, true,  false},
-    {"STOR-W2S2-OB",  0x04, form_2, true,  0x05, form_4, true,  0x26, true,  false},
-    {"STOR-W2S2-OC",  0x04, form_2, true,  0x05, form_4, true,  0x27, true,  false},
-    {"STOR-W1S0",     0x04, form_2, true,  0x05, form_4, true,  0x88, true,  true},
-    {"STOR-W1S0-ABS", 0x04, form_2, true,  0x05, form_4, true,  0x08, true,  false},
-    {"STOR-W1S0-OA",  0x04, form_2, true,  0x05, form_4, true,  0x09, true,  false},
-    {"STOR-W1S0-OB",  0x04, form_2, true,  0x05, form_4, true,  0x0A, true,  false},
-    {"STOR-W1S0-OC",  0x04, form_2, true,  0x05, form_4, true,  0x0B, true,  false},
-    {"STOR-W1S1",     0x04, form_2, true,  0x05, form_4, true,  0x98, true,  true},
-    {"STOR-W1S1-ABS", 0x04, form_2, true,  0x05, form_4, true,  0x18, true,  false},
-    {"STOR-W1S1-OA",  0x04, form_2, true,  0x05, form_4, true,  0x19, true,  false},
-    {"STOR-W1S1-OB",  0x04, form_2, true,  0x05, form_4, true,  0x1A, true,  false},
-    {"STOR-W1S1-OC",  0x04, form_2, true,  0x05, form_4, true,  0x1B, true,  false},
-    {"STOR-W1S2",     0x04, form_2, true,  0x05, form_4, true,  0xA8, true,  true},
-    {"STOR-W1S2-ABS", 0x04, form_2, true,  0x05, form_4, true,  0x28, true,  false},
-    {"STOR-W1S2-OA",  0x04, form_2, true,  0x05, form_4, true,  0x29, true,  false},
-    {"STOR-W1S2-OB",  0x04, form_2, true,  0x05, form_4, true,  0x2A, true,  false},
-    {"STOR-W1S2-OC",  0x04, form_2, true,  0x05, form_4, true,  0x2B, true,  false},
-    {"STOR-W1S3",     0x04, form_2, true,  0x05, form_4, true,  0xB8, true,  true},
-    {"STOR-W1S3-ABS", 0x04, form_2, true,  0x05, form_4, true,  0x38, true,  false},
-    {"STOR-W1S3-OA",  0x04, form_2, true,  0x05, form_4, true,  0x39, true,  false},
-    {"STOR-W1S3-OB",  0x04, form_2, true,  0x05, form_4, true,  0x3A, true,  false},
-    {"STOR-W1S3-OC",  0x04, form_2, true,  0x05, form_4, true,  0x3B, true,  false},
-    {"SWAP",          0x14, form_2, true,  0x15, form_4, true,  0x80, true,  true},
-    {"SWAP-ABS",      0x14, form_2, true,  0x15, form_4, true,  0x00, true,  false},
-    {"SWAP-OA",       0x14, form_2, true,  0x15, form_4, true,  0x01, true,  false},
-    {"SWAP-OB",       0x14, form_2, true,  0x15, form_4, true,  0x02, true,  false},
-    {"SWAP-OC",       0x14, form_2, true,  0x15, form_4, true,  0x03, true,  false},
-    {"SWAP-W2S0",     0x14, form_2, true,  0x15, form_4, true,  0x84, true,  true},
-    {"SWAP-W2S0-ABS", 0x14, form_2, true,  0x15, form_4, true,  0x04, true,  false},
-    {"SWAP-W2S0-OA",  0x14, form_2, true,  0x15, form_4, true,  0x05, true,  false},
-    {"SWAP-W2S0-OB",  0x14, form_2, true,  0x15, form_4, true,  0x06, true,  false},
-    {"SWAP-W2S0-OC",  0x14, form_2, true,  0x15, form_4, true,  0x07, true,  false},
-    {"SWAP-W2S1",     0x14, form_2, true,  0x15, form_4, true,  0x94, true,  true},
-    {"SWAP-W2S1-ABS", 0x14, form_2, true,  0x15, form_4, true,  0x14, true,  false},
-    {"SWAP-W2S1-OA",  0x14, form_2, true,  0x15, form_4, true,  0x15, true,  false},
-    {"SWAP-W2S1-OB",  0x14, form_2, true,  0x15, form_4, true,  0x16, true,  false},
-    {"SWAP-W2S1-OC",  0x14, form_2, true,  0x15, form_4, true,  0x17, true,  false},
-    {"SWAP-W2S2",     0x14, form_2, true,  0x15, form_4, true,  0xA4, true,  true},
-    {"SWAP-W2S2-ABS", 0x14, form_2, true,  0x15, form_4, true,  0x24, true,  false},
-    {"SWAP-W2S2-OA",  0x14, form_2, true,  0x15, form_4, true,  0x25, true,  false},
-    {"SWAP-W2S2-OB",  0x14, form_2, true,  0x15, form_4, true,  0x26, true,  false},
-    {"SWAP-W2S2-OC",  0x14, form_2, true,  0x15, form_4, true,  0x27, true,  false},
-    {"SWAP-W1S0",     0x14, form_2, true,  0x15, form_4, true,  0x88, true,  true},
-    {"SWAP-W1S0-ABS", 0x14, form_2, true,  0x15, form_4, true,  0x08, true,  false},
-    {"SWAP-W1S0-OA",  0x14, form_2, true,  0x15, form_4, true,  0x09, true,  false},
-    {"SWAP-W1S0-OB",  0x14, form_2, true,  0x15, form_4, true,  0x0A, true,  false},
-    {"SWAP-W1S0-OC",  0x14, form_2, true,  0x15, form_4, true,  0x0B, true,  false},
-    {"SWAP-W1S1",     0x14, form_2, true,  0x15, form_4, true,  0x98, true,  true},
-    {"SWAP-W1S1-ABS", 0x14, form_2, true,  0x15, form_4, true,  0x18, true,  false},
-    {"SWAP-W1S1-OA",  0x14, form_2, true,  0x15, form_4, true,  0x19, true,  false},
-    {"SWAP-W1S1-OB",  0x14, form_2, true,  0x15, form_4, true,  0x1A, true,  false},
-    {"SWAP-W1S1-OC",  0x14, form_2, true,  0x15, form_4, true,  0x1B, true,  false},
-    {"SWAP-W1S2",     0x14, form_2, true,  0x15, form_4, true,  0xA8, true,  true},
-    {"SWAP-W1S2-ABS", 0x14, form_2, true,  0x15, form_4, true,  0x28, true,  false},
-    {"SWAP-W1S2-OA",  0x14, form_2, true,  0x15, form_4, true,  0x29, true,  false},
-    {"SWAP-W1S2-OB",  0x14, form_2, true,  0x15, form_4, true,  0x2A, true,  false},
-    {"SWAP-W1S2-OC",  0x14, form_2, true,  0x15, form_4, true,  0x2B, true,  false},
-    {"SWAP-W1S3",     0x14, form_2, true,  0x15, form_4, true,  0xB8, true,  true},
-    {"SWAP-W1S3-ABS", 0x14, form_2, true,  0x15, form_4, true,  0x38, true,  false},
-    {"SWAP-W1S3-OA",  0x14, form_2, true,  0x15, form_4, true,  0x39, true,  false},
-    {"SWAP-W1S3-OB",  0x14, form_2, true,  0x15, form_4, true,  0x3A, true,  false},
-    {"SWAP-W1S3-OC",  0x14, form_2, true,  0x15, form_4, true,  0x3B, true,  false},
-    {"GETABS",        0x02, form_2, true,  0x03, form_4, true,  0xC0, true,  true},
-    {"GETABS-OA",     0x02, form_2, true,  0x03, form_4, true,  0x41, true,  false},
-    {"GETABS-OB",     0x02, form_2, true,  0x03, form_4, true,  0x42, true,  false},
-    {"GETABS-OC",     0x02, form_2, true,  0x03, form_4, true,  0x43, true,  false},
-    {"GETREL-OA",     0x02, form_2, true,  0x03, form_4, true,  0xC1, true,  true},
-    {"GETREL-OB",     0x02, form_2, true,  0x03, form_4, true,  0xC2, true,  true},
-    {"GETREL-OC",     0x02, form_2, true,  0x03, form_4, true,  0xC3, true,  true},
-    {"BRAL",          0x0C, form_4, true,  0x0D, form_6, true,  0x80, true,  true},
-    {"BRAL-ABS",      0x0C, form_4, true,  0x0D, form_6, true,  0x00, true,  false},
-    {"BRAL-OA",       0x0C, form_4, true,  0x0D, form_6, true,  0x01, true,  false},
-    {"BRAL-OB",       0x0C, form_4, true,  0x0D, form_6, true,  0x02, true,  false},
-    {"BRAL-OC",       0x0C, form_4, true,  0x0D, form_6, true,  0x03, true,  false},
-    {"BRAL-P",        0x0C, form_4, true,  0x0D, form_6, true,  0xC0, true,  true},
-    {"BRAL-P-ABS",    0x0C, form_4, true,  0x0D, form_6, true,  0x40, true,  false},
-    {"BRAL-P-OA",     0x0C, form_4, true,  0x0D, form_6, true,  0x41, true,  false},
-    {"BRAL-P-OB",     0x0C, form_4, true,  0x0D, form_6, true,  0x42, true,  false},
-    {"BRAL-P-OC",     0x0C, form_4, true,  0x0D, form_6, true,  0x43, true,  false},
-    {"BREQ",          0x1C, form_4, true,  0x1D, form_6, true,  0x80, true,  true},
-    {"BREQ-ABS",      0x1C, form_4, true,  0x1D, form_6, true,  0x00, true,  false},
-    {"BREQ-OA",       0x1C, form_4, true,  0x1D, form_6, true,  0x01, true,  false},
-    {"BREQ-OB",       0x1C, form_4, true,  0x1D, form_6, true,  0x02, true,  false},
-    {"BREQ-OC",       0x1C, form_4, true,  0x1D, form_6, true,  0x03, true,  false},
-    {"BREQ-P",        0x1C, form_4, true,  0x1D, form_6, true,  0xC0, true,  true},
-    {"BREQ-P-ABS",    0x1C, form_4, true,  0x1D, form_6, true,  0x40, true,  false},
-    {"BREQ-P-OA",     0x1C, form_4, true,  0x1D, form_6, true,  0x41, true,  false},
-    {"BREQ-P-OB",     0x1C, form_4, true,  0x1D, form_6, true,  0x42, true,  false},
-    {"BREQ-P-OC",     0x1C, form_4, true,  0x1D, form_6, true,  0x43, true,  false},
-    {"BRNE",          0x2C, form_4, true,  0x2D, form_6, true,  0x80, true,  true},
-    {"BRNE-ABS",      0x2C, form_4, true,  0x2D, form_6, true,  0x00, true,  false},
-    {"BRNE-OA",       0x2C, form_4, true,  0x2D, form_6, true,  0x01, true,  false},
-    {"BRNE-OB",       0x2C, form_4, true,  0x2D, form_6, true,  0x02, true,  false},
-    {"BRNE-OC",       0x2C, form_4, true,  0x2D, form_6, true,  0x03, true,  false},
-    {"BRNE-P",        0x2C, form_4, true,  0x2D, form_6, true,  0xC0, true,  true},
-    {"BRNE-P-ABS",    0x2C, form_4, true,  0x2D, form_6, true,  0x40, true,  false},
-    {"BRNE-P-OA",     0x2C, form_4, true,  0x2D, form_6, true,  0x41, true,  false},
-    {"BRNE-P-OB",     0x2C, form_4, true,  0x2D, form_6, true,  0x42, true,  false},
-    {"BRNE-P-OC",     0x2C, form_4, true,  0x2D, form_6, true,  0x43, true,  false},
-    {"BRHI",          0x3C, form_4, true,  0x3D, form_6, true,  0x80, true,  true},
-    {"BRHI-ABS",      0x3C, form_4, true,  0x3D, form_6, true,  0x00, true,  false},
-    {"BRHI-OA",       0x3C, form_4, true,  0x3D, form_6, true,  0x01, true,  false},
-    {"BRHI-OB",       0x3C, form_4, true,  0x3D, form_6, true,  0x02, true,  false},
-    {"BRHI-OC",       0x3C, form_4, true,  0x3D, form_6, true,  0x03, true,  false},
-    {"BRHI-P",        0x3C, form_4, true,  0x3D, form_6, true,  0xC0, true,  true},
-    {"BRHI-P-ABS",    0x3C, form_4, true,  0x3D, form_6, true,  0x40, true,  false},
-    {"BRHI-P-OA",     0x3C, form_4, true,  0x3D, form_6, true,  0x41, true,  false},
-    {"BRHI-P-OB",     0x3C, form_4, true,  0x3D, form_6, true,  0x42, true,  false},
-    {"BRHI-P-OC",     0x3C, form_4, true,  0x3D, form_6, true,  0x43, true,  false},
-    {"BRHS",          0x4C, form_4, true,  0x4D, form_6, true,  0x80, true,  true},
-    {"BRHS-ABS",      0x4C, form_4, true,  0x4D, form_6, true,  0x00, true,  false},
-    {"BRHS-OA",       0x4C, form_4, true,  0x4D, form_6, true,  0x01, true,  false},
-    {"BRHS-OB",       0x4C, form_4, true,  0x4D, form_6, true,  0x02, true,  false},
-    {"BRHS-OC",       0x4C, form_4, true,  0x4D, form_6, true,  0x03, true,  false},
-    {"BRHS-P",        0x4C, form_4, true,  0x4D, form_6, true,  0xC0, true,  true},
-    {"BRHS-P-ABS",    0x4C, form_4, true,  0x4D, form_6, true,  0x40, true,  false},
-    {"BRHS-P-OA",     0x4C, form_4, true,  0x4D, form_6, true,  0x41, true,  false},
-    {"BRHS-P-OB",     0x4C, form_4, true,  0x4D, form_6, true,  0x42, true,  false},
-    {"BRHS-P-OC",     0x4C, form_4, true,  0x4D, form_6, true,  0x43, true,  false},
-    {"BRLS",          0x5C, form_4, true,  0x5D, form_6, true,  0x80, true,  true},
-    {"BRLS-ABS",      0x5C, form_4, true,  0x5D, form_6, true,  0x00, true,  false},
-    {"BRLS-OA",       0x5C, form_4, true,  0x5D, form_6, true,  0x01, true,  false},
-    {"BRLS-OB",       0x5C, form_4, true,  0x5D, form_6, true,  0x02, true,  false},
-    {"BRLS-OC",       0x5C, form_4, true,  0x5D, form_6, true,  0x03, true,  false},
-    {"BRLS-P",        0x5C, form_4, true,  0x5D, form_6, true,  0xC0, true,  true},
-    {"BRLS-P-ABS",    0x5C, form_4, true,  0x5D, form_6, true,  0x40, true,  false},
-    {"BRLS-P-OA",     0x5C, form_4, true,  0x5D, form_6, true,  0x41, true,  false},
-    {"BRLS-P-OB",     0x5C, form_4, true,  0x5D, form_6, true,  0x42, true,  false},
-    {"BRLS-P-OC",     0x5C, form_4, true,  0x5D, form_6, true,  0x43, true,  false},
-    {"BRLO",          0x6C, form_4, true,  0x6D, form_6, true,  0x80, true,  true},
-    {"BRLO-ABS",      0x6C, form_4, true,  0x6D, form_6, true,  0x00, true,  false},
-    {"BRLO-OA",       0x6C, form_4, true,  0x6D, form_6, true,  0x01, true,  false},
-    {"BRLO-OB",       0x6C, form_4, true,  0x6D, form_6, true,  0x02, true,  false},
-    {"BRLO-OC",       0x6C, form_4, true,  0x6D, form_6, true,  0x03, true,  false},
-    {"BRLO-P",        0x6C, form_4, true,  0x6D, form_6, true,  0xC0, true,  true},
-    {"BRLO-P-ABS",    0x6C, form_4, true,  0x6D, form_6, true,  0x40, true,  false},
-    {"BRLO-P-OA",     0x6C, form_4, true,  0x6D, form_6, true,  0x41, true,  false},
-    {"BRLO-P-OB",     0x6C, form_4, true,  0x6D, form_6, true,  0x42, true,  false},
-    {"BRLO-P-OC",     0x6C, form_4, true,  0x6D, form_6, true,  0x43, true,  false},
-    {"BRGT",          0x7C, form_4, true,  0x7D, form_6, true,  0x80, true,  true},
-    {"BRGT-ABS",      0x7C, form_4, true,  0x7D, form_6, true,  0x00, true,  false},
-    {"BRGT-OA",       0x7C, form_4, true,  0x7D, form_6, true,  0x01, true,  false},
-    {"BRGT-OB",       0x7C, form_4, true,  0x7D, form_6, true,  0x02, true,  false},
-    {"BRGT-OC",       0x7C, form_4, true,  0x7D, form_6, true,  0x03, true,  false},
-    {"BRGT-P",        0x7C, form_4, true,  0x7D, form_6, true,  0xC0, true,  true},
-    {"BRGT-P-ABS",    0x7C, form_4, true,  0x7D, form_6, true,  0x40, true,  false},
-    {"BRGT-P-OA",     0x7C, form_4, true,  0x7D, form_6, true,  0x41, true,  false},
-    {"BRGT-P-OB",     0x7C, form_4, true,  0x7D, form_6, true,  0x42, true,  false},
-    {"BRGT-P-OC",     0x7C, form_4, true,  0x7D, form_6, true,  0x43, true,  false},
-    {"BRGE",          0x8C, form_4, true,  0x8D, form_6, true,  0x80, true,  true},
-    {"BRGE-ABS",      0x8C, form_4, true,  0x8D, form_6, true,  0x00, true,  false},
-    {"BRGE-OA",       0x8C, form_4, true,  0x8D, form_6, true,  0x01, true,  false},
-    {"BRGE-OB",       0x8C, form_4, true,  0x8D, form_6, true,  0x02, true,  false},
-    {"BRGE-OC",       0x8C, form_4, true,  0x8D, form_6, true,  0x03, true,  false},
-    {"BRGE-P",        0x8C, form_4, true,  0x8D, form_6, true,  0xC0, true,  true},
-    {"BRGE-P-ABS",    0x8C, form_4, true,  0x8D, form_6, true,  0x40, true,  false},
-    {"BRGE-P-OA",     0x8C, form_4, true,  0x8D, form_6, true,  0x41, true,  false},
-    {"BRGE-P-OB",     0x8C, form_4, true,  0x8D, form_6, true,  0x42, true,  false},
-    {"BRGE-P-OC",     0x8C, form_4, true,  0x8D, form_6, true,  0x43, true,  false},
-    {"BRLE",          0x9C, form_4, true,  0x9D, form_6, true,  0x80, true,  true},
-    {"BRLE-ABS",      0x9C, form_4, true,  0x9D, form_6, true,  0x00, true,  false},
-    {"BRLE-OA",       0x9C, form_4, true,  0x9D, form_6, true,  0x01, true,  false},
-    {"BRLE-OB",       0x9C, form_4, true,  0x9D, form_6, true,  0x02, true,  false},
-    {"BRLE-OC",       0x9C, form_4, true,  0x9D, form_6, true,  0x03, true,  false},
-    {"BRLE-P",        0x9C, form_4, true,  0x9D, form_6, true,  0xC0, true,  true},
-    {"BRLE-P-ABS",    0x9C, form_4, true,  0x9D, form_6, true,  0x40, true,  false},
-    {"BRLE-P-OA",     0x9C, form_4, true,  0x9D, form_6, true,  0x41, true,  false},
-    {"BRLE-P-OB",     0x9C, form_4, true,  0x9D, form_6, true,  0x42, true,  false},
-    {"BRLE-P-OC",     0x9C, form_4, true,  0x9D, form_6, true,  0x43, true,  false},
-    {"BRLT",          0xAC, form_4, true,  0xAD, form_6, true,  0x80, true,  true},
-    {"BRLT-ABS",      0xAC, form_4, true,  0xAD, form_6, true,  0x00, true,  false},
-    {"BRLT-OA",       0xAC, form_4, true,  0xAD, form_6, true,  0x01, true,  false},
-    {"BRLT-OB",       0xAC, form_4, true,  0xAD, form_6, true,  0x02, true,  false},
-    {"BRLT-OC",       0xAC, form_4, true,  0xAD, form_6, true,  0x03, true,  false},
-    {"BRLT-P",        0xAC, form_4, true,  0xAD, form_6, true,  0xC0, true,  true},
-    {"BRLT-P-ABS",    0xAC, form_4, true,  0xAD, form_6, true,  0x40, true,  false},
-    {"BRLT-P-OA",     0xAC, form_4, true,  0xAD, form_6, true,  0x41, true,  false},
-    {"BRLT-P-OB",     0xAC, form_4, true,  0xAD, form_6, true,  0x42, true,  false},
-    {"BRLT-P-OC",     0xAC, form_4, true,  0xAD, form_6, true,  0x43, true,  false},
-    {"BRMI",          0xBC, form_4, true,  0xBD, form_6, true,  0x80, true,  true},
-    {"BRMI-ABS",      0xBC, form_4, true,  0xBD, form_6, true,  0x00, true,  false},
-    {"BRMI-OA",       0xBC, form_4, true,  0xBD, form_6, true,  0x01, true,  false},
-    {"BRMI-OB",       0xBC, form_4, true,  0xBD, form_6, true,  0x02, true,  false},
-    {"BRMI-OC",       0xBC, form_4, true,  0xBD, form_6, true,  0x03, true,  false},
-    {"BRMI-P",        0xBC, form_4, true,  0xBD, form_6, true,  0xC0, true,  true},
-    {"BRMI-P-ABS",    0xBC, form_4, true,  0xBD, form_6, true,  0x40, true,  false},
-    {"BRMI-P-OA",     0xBC, form_4, true,  0xBD, form_6, true,  0x41, true,  false},
-    {"BRMI-P-OB",     0xBC, form_4, true,  0xBD, form_6, true,  0x42, true,  false},
-    {"BRMI-P-OC",     0xBC, form_4, true,  0xBD, form_6, true,  0x43, true,  false},
-    {"BRPZ",          0xCC, form_4, true,  0xCD, form_6, true,  0x80, true,  true},
-    {"BRPZ-ABS",      0xCC, form_4, true,  0xCD, form_6, true,  0x00, true,  false},
-    {"BRPZ-OA",       0xCC, form_4, true,  0xCD, form_6, true,  0x01, true,  false},
-    {"BRPZ-OB",       0xCC, form_4, true,  0xCD, form_6, true,  0x02, true,  false},
-    {"BRPZ-OC",       0xCC, form_4, true,  0xCD, form_6, true,  0x03, true,  false},
-    {"BRPZ-P",        0xCC, form_4, true,  0xCD, form_6, true,  0xC0, true,  true},
-    {"BRPZ-P-ABS",    0xCC, form_4, true,  0xCD, form_6, true,  0x40, true,  false},
-    {"BRPZ-P-OA",     0xCC, form_4, true,  0xCD, form_6, true,  0x41, true,  false},
-    {"BRPZ-P-OB",     0xCC, form_4, true,  0xCD, form_6, true,  0x42, true,  false},
-    {"BRPZ-P-OC",     0xCC, form_4, true,  0xCD, form_6, true,  0x43, true,  false},
-    {"BROV",          0xDC, form_4, true,  0xDD, form_6, true,  0x80, true,  true},
-    {"BROV-ABS",      0xDC, form_4, true,  0xDD, form_6, true,  0x00, true,  false},
-    {"BROV-OA",       0xDC, form_4, true,  0xDD, form_6, true,  0x01, true,  false},
-    {"BROV-OB",       0xDC, form_4, true,  0xDD, form_6, true,  0x02, true,  false},
-    {"BROV-OC",       0xDC, form_4, true,  0xDD, form_6, true,  0x03, true,  false},
-    {"BROV-P",        0xDC, form_4, true,  0xDD, form_6, true,  0xC0, true,  true},
-    {"BROV-P-ABS",    0xDC, form_4, true,  0xDD, form_6, true,  0x40, true,  false},
-    {"BROV-P-OA",     0xDC, form_4, true,  0xDD, form_6, true,  0x41, true,  false},
-    {"BROV-P-OB",     0xDC, form_4, true,  0xDD, form_6, true,  0x42, true,  false},
-    {"BROV-P-OC",     0xDC, form_4, true,  0xDD, form_6, true,  0x43, true,  false},
-    {"BRNV",          0xEC, form_4, true,  0xED, form_6, true,  0x80, true,  true},
-    {"BRNV-ABS",      0xEC, form_4, true,  0xED, form_6, true,  0x00, true,  false},
-    {"BRNV-OA",       0xEC, form_4, true,  0xED, form_6, true,  0x01, true,  false},
-    {"BRNV-OB",       0xEC, form_4, true,  0xED, form_6, true,  0x02, true,  false},
-    {"BRNV-OC",       0xEC, form_4, true,  0xED, form_6, true,  0x03, true,  false},
-    {"BRNV-P",        0xEC, form_4, true,  0xED, form_6, true,  0xC0, true,  true},
-    {"BRNV-P-ABS",    0xEC, form_4, true,  0xED, form_6, true,  0x40, true,  false},
-    {"BRNV-P-OA",     0xEC, form_4, true,  0xED, form_6, true,  0x41, true,  false},
-    {"BRNV-P-OB",     0xEC, form_4, true,  0xED, form_6, true,  0x42, true,  false},
-    {"BRNV-P-OC",     0xEC, form_4, true,  0xED, form_6, true,  0x43, true,  false},
-    {"NOOP",          0x00, form_6, false, 0,    0,      false, 0,    false, false},
-    {"DEBUG",         0x10, form_4, false, 0,    0,      false, 0,    false, false},
-    {"TERM",          0xFF, form_6, false, 0,    0,      false, 0,    false, false}
+{
+    {"move",     false, 0, moveFormResolver, 0, moveOpCodeResolver, NULL, true},
+    {"load.pc",  true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, true},
+    {"load..pc", true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, true},
+    {"load...",  true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, false},
+    {"load....", true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, false},
 };
 
 static char regselDescriptors[][3] = 
@@ -355,35 +57,110 @@ static char regselDescriptors[][3] =
 
 static uint8_t formArgCount[] = 
 {
-    3, // form_1
-    2, // form_2
-    3, // form_3
-    1, // form_4
-    2, // form_5
-    0, // form_6
-    1  // form_7
+    0, // form 1
+    1, // form 1w
+    1, // form 1h
+    1, // form 1c
+    1, // form 2
+    2, // form 2w
+    2, // form 2h
+    2, // form 2c
+    2, // form 3
+    3, // form 3w
+    3, // form 3h
+    3, // form 3c
+    3, // form 4
+    4, // form 4w
+    4, // form 4h
+    4, // form 4c
+    0, // form 5
+    1, // form 5w
+    1, // form 5h
+    1, // form 5c
+    1, // form 6
+    2, // form 6w
+    2, // form 6h
+    2, // form 6c
+    2, // form 7
+    3, // form 7w
+    3, // form 7h
+    3, // form 7c
+    3, // form 8
+    4, // form 8w
+    4, // form 8h
+    4, // form 8c
+};
+
+static uint8_t formInstructionSize[] = 
+{
+    1, // form 1
+    5, // form 1w
+    3, // form 1h
+    2, // form 1c
+    2, // form 2
+    6, // form 2w
+    4, // form 2h
+    3, // form 2c
+    2, // form 3
+    6, // form 3w
+    4, // form 3h
+    3, // form 3c
+    3, // form 4
+    7, // form 4w
+    5, // form 4h
+    4, // form 4c
+    2, // form 5
+    6, // form 5w
+    4, // form 5h
+    3, // form 5c
+    2, // form 6
+    6, // form 6w
+    4, // form 6h
+    3, // form 6c
+    3, // form 7
+    7, // form 7w
+    5, // form 7h
+    4, // form 7c
+    3, // form 8
+    7, // form 8w
+    5, // form 8h
+    4, // form 8c
 };
 
 static uint8_t formRegselCount[] = 
 {
-    3, // form_1
-    2, // form_2
-    2, // form_3
-    1, // form_4
-    1, // form_5
-    0, // form_6
-    0  // form_7
-};
-
-static uint32_t formMaxArgSize[] =
-{
-    0,         // form_1
-    0,         // form_2
-    0xFFFF,    // form_3
-    0,         // form_4
-    0xFFFFF,   // form_5
-    0,         // form_6
-    0xFFFFFF,  // form_7
+    0, // form 1
+    0, // form 1w
+    0, // form 1h
+    0, // form 1c
+    1, // form 2
+    1, // form 2w
+    1, // form 2h
+    1, // form 2c
+    2, // form 3
+    2, // form 3w
+    2, // form 3h
+    2, // form 3c
+    3, // form 4
+    3, // form 4w
+    3, // form 4h
+    3, // form 4c
+    0, // form 5
+    0, // form 5w
+    0, // form 5h
+    0, // form 5c
+    1, // form 6
+    1, // form 6w
+    1, // form 6h
+    1, // form 6c
+    2, // form 7
+    2, // form 7w
+    2, // form 7h
+    2, // form 7c
+    3, // form 8
+    3, // form 8w
+    3, // form 8h
+    3, // form 8c
 };
 
 static uint8_t getRegsel(char *str)
@@ -564,12 +341,94 @@ static bool parseHexadecimal(char *str, uint32_t *out)
     return true;
 }
 
-static bool parseLiteral(char *literal, uint32_t *out)
+static bool parseFloat(char *literal, uint32_t *out)
 {
+    float    outf            = 0;
+    bool     isNegative      = false;
+    uint32_t intParse        = 0;
+    char     charBuf[32]     = {0};
+    char    *decimalLocation = NULL;
+    float    divisor         = 0;
+
     if (NULL == literal ||
-        NULL == out)
+        '\0' == literal[0] ||
+        NULL == strstr(literal, "."))
     {
         return false;
+    }
+
+    if ('-' == literal[0])
+    {
+        isNegative = true;
+        literal++;
+
+        if ('\0' == literal[0])
+        {
+            return false;
+        }
+    }
+
+    decimalLocation = strstr(literal, ".");
+
+    memcpy(charBuf, literal, decimalLocation - literal);
+    charBuf[decimalLocation - literal] = '\0';
+
+    if (false == parseDecimal(charBuf, &intParse))
+    {
+        return false;
+    }
+
+    outf = intParse;
+
+    if (false == parseDecimal(decimalLocation + 1, &intParse))
+    {
+        return false;
+    }
+
+    divisor = 1.0;
+    for (uint8_t i = strlen(decimalLocation + 1); i != 0; i--)
+    {
+        divisor *= 10.0;
+    }
+
+    outf += ((float)intParse) / divisor;
+
+    if (isNegative)
+    {
+        outf *= -1.0;
+    }
+
+    memcpy(out, &outf, 4);
+
+    return true;
+}
+
+static bool parseLiteral(char *literal, uint32_t *out, bool *isFloat)
+{
+    bool makeNegative = false;
+
+    if (NULL == literal ||
+        NULL == out     ||
+        NULL == isFloat)
+    {
+        return false;
+    }
+
+    if (NULL != strstr(literal, "."))
+    {
+        if (parseFloat(literal, out))
+        {
+            *isFloat = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    if ('-' == literal[0])
+    {
+        makeNegative = true;
+        literal++;
     }
 
     if (strlen(literal) >= 3)
@@ -578,70 +437,306 @@ static bool parseLiteral(char *literal, uint32_t *out)
         if (0 == strncmp(literal, "0b", 2))
         {
             // Binary
-            return parseBinary(&(literal[2]), out);
+            if (false == parseBinary(&(literal[2]), out))
+            {
+                return false;
+            }
 
         }
         else if (0 == strncmp(literal, "0x", 2))
         {
             // Hexadecimal
-            return parseHexadecimal(&(literal[2]), out);
+            if (false == parseHexadecimal(&(literal[2]), out))
+            {
+                return false;
+            }
+        }
+        else if (false == parseDecimal(literal, out))
+        {
+            return false;
+        }
+    }
+    else if (false == parseDecimal(literal, out))
+    {
+        return false;
+    }
+
+    if (makeNegative)
+    {
+        *out = ~(*out) + 1;
+    }
+
+    return true;
+}
+
+static instructionForm_e moveFormResolver(tokens_t *tokens)
+{
+    bool     isFloat       = false;
+    uint32_t parsedLiteral = 0;
+
+    if (NULL == tokens             ||
+        1    >  tokens->tokenCount ||
+        0    != strcmp("move", tokens->tokens[0]))
+    {
+        INTERNAL_ERROR;
+        return INS_FORM_ERR;
+    }
+
+    if (3 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"move\" requires exactly 2 arguments\n", inputFileName, lineNumber);
+        return INS_FORM_ERR;
+    }
+
+    if (false == isValidRegsel(tokens->tokens[1]))
+    {
+        printf("%s:%u: \"move\" requires the first argument to be a regsel\n", inputFileName, lineNumber);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[2]))
+    {
+        return INS_FORM_3;
+    }
+
+    if (parseLiteral(tokens->tokens[2], &parsedLiteral, &isFloat))
+    {
+        if (isFloat)
+        {
+            return INS_FORM_2W;
+        }
+
+        if (parsedLiteral <= 0xFF ||
+            parsedLiteral >= 0xFFFFFF80)
+        {
+            return INS_FORM_2C;
+        }
+
+        if (parsedLiteral <= 0xFFFF ||
+            parsedLiteral >= 0xFFFF8000)
+        {
+            return INS_FORM_2H;
         }
     }
 
-    return parseDecimal(literal, out);;
+    return INS_FORM_2W;
 }
 
-static int getInstructionSize(tokens_t *tokens, uint32_t lineNumber)
+static int moveOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm)
+{
+    bool     isFloat       = false;
+    uint32_t parsedLiteral = 0;
+
+    if (NULL == tokens             ||
+        1    >  tokens->tokenCount ||
+        0    != strcmp("move", tokens->tokens[0]))
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (3 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"move\" requires exactly 2 arguments\n", inputFileName, lineNumber);
+        return INS_FORM_ERR;
+    }
+
+    if (INS_FORM_3 == instructionForm)
+    {
+        return 0x01;
+    }
+
+    if (INS_FORM_2W == instructionForm)
+    {
+        return 0x02;
+    }
+
+    if (false == parseLiteral(tokens->tokens[2], &parsedLiteral, &isFloat))
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (INS_FORM_2H == instructionForm)
+    {
+        if (parsedLiteral > 0xFFFF)
+        {
+            return 0x04;
+        }
+        return 0x03;
+    }
+
+    if (INS_FORM_2C == instructionForm)
+    {
+        if (parsedLiteral > 0xFF)
+        {
+            return 0x06;
+        }
+        return 0x05;
+    }
+
+    INTERNAL_ERROR;
+    return -1;
+}
+
+static instructionForm_e loadFormResolver(tokens_t *tokens)
+{
+    if (NULL == tokens ||
+        1    >  tokens->tokenCount)
+    {
+        return INS_FORM_ERR;
+    }
+
+    if (3 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 2 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[2]))
+    {
+        return INS_FORM_3;
+    }
+
+    return INS_FORM_2W;
+}
+
+static int loadOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm)
+{
+    char                *instructionNameShift = NULL;
+    loadWidthModifiers_e lwm                  = 0;
+    addressingMode_e     addressingMode       = 0;
+
+    if (NULL == tokens ||
+        1    >  tokens->tokenCount)
+    {
+        return -1;
+    }
+
+    if (3 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 2 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    // Skip over 'load' and leave us with the xx part
+    instructionNameShift = tokens->tokens[0] + 4;
+
+    // Getting the width modifier
+    if ('w' == instructionNameShift[0])
+    {
+        lwm = LWM_W;
+        instructionNameShift += 1;
+    }
+    else if ('h' == instructionNameShift[0])
+    {
+        lwm = LWM_H;
+        instructionNameShift += 1;
+    }
+    else if ('\0' != instructionNameShift[0] &&
+             's'  == instructionNameShift[0] &&
+             'h'  == instructionNameShift[1])
+    {
+        lwm = LWM_SH;
+        instructionNameShift += 2;
+    }
+    else if ('c' == instructionNameShift[0])
+    {
+        lwm = LWM_C;
+        instructionNameShift += 1;
+    }
+    else if ('\0' != instructionNameShift[0] &&
+             's'  == instructionNameShift[0] &&
+             'c'  == instructionNameShift[1])
+    {
+        lwm = LWM_SH;
+        instructionNameShift += 2;
+    }
+    else
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    // Getting the addressing mode
+    if (2 != strlen(instructionNameShift))
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    if (0 == strcmp(instructionNameShift, "ab"))
+    {
+        addressingMode = ADDRESSING_MODE_AB;
+    }
+    else if (0 == strcmp(instructionNameShift, "pc"))
+    {
+        addressingMode = ADDRESSING_MODE_PC;
+    }
+    else if (0 == strcmp(instructionNameShift, "oa"))
+    {
+        addressingMode = ADDRESSING_MODE_OA;
+    }
+    else if (0 == strcmp(instructionNameShift, "ob"))
+    {
+        addressingMode = ADDRESSING_MODE_OB;
+    }
+    else if (0 == strcmp(instructionNameShift, "oc"))
+    {
+        addressingMode = ADDRESSING_MODE_OC;
+    }
+    else
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    if (INS_FORM_3 == instructionForm)
+    {
+        return 0x07 + lwm * 5 + addressingMode;
+    }
+    return 0x20 + lwm * 5 + addressingMode;
+}
+
+static int getInstructionSize(tokens_t *tokens)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
-    bool                     isAlternateForm    = false;
+    instructionForm_e        instructionForm    = 0;
 
     if (NULL == tokens             ||
         0    == tokens->tokenCount)
     {
         INTERNAL_ERROR;
-        return false;
+        return -1;
     }
 
     for (uint16_t i = 0; i < sizeof(instructionDescriptors) / sizeof(instructionDescriptor_t); i++)
     {
         descriptorInstance = &(instructionDescriptors[i]);
 
-        if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr))
+        if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr) ||
+            (descriptorInstance->useWildcards &&
+             simpleRegex(descriptorInstance->instructionStr, tokens->tokens[0])))
         {
-            if (tokens->tokenCount - 1 != formArgCount[descriptorInstance->primaryForm])
+            if (NULL != descriptorInstance->formResolverFunction)
             {
-                if (tokens->tokenCount - 1 > formArgCount[descriptorInstance->primaryForm])
-                {
-                    printf("%s:%u: too many arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
-                }
-                else
-                {
-                    printf("%s:%u: too few arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
-                }
-                return -1;
-            }
+                instructionForm = descriptorInstance->formResolverFunction(tokens);
 
-            // If the last argument is valid regsel, then we're not using alternate form.
-            isAlternateForm = !isValidRegsel(tokens->tokens[tokens->tokenCount - 1]);
-
-            if (false == isAlternateForm ||
-                false == descriptorInstance->alternateFormUsesArgAugment)
-            {
-                if (false == descriptorInstance->hasInstructionAugment)
+                if (INS_FORM_ERR == instructionForm)
                 {
-                    return 4;
+                    return -1;
                 }
 
-                return 5;
+                return formInstructionSize[instructionForm];
             }
 
-            if (false == descriptorInstance->hasInstructionAugment)
-            {
-                return 8;
-            }
-
-            return 9;
+            // TODO
+            INTERNAL_ERROR;
+            return -1;
         }
     }
 
@@ -650,7 +745,7 @@ static int getInstructionSize(tokens_t *tokens, uint32_t lineNumber)
     return -1;
 }
 
-static bool parseLabel(char *labelWithoutColon, uint32_t lineNumber, uint32_t address)
+static bool parseLabel(char *labelWithoutColon, uint32_t address)
 {
     label_t *newLabel = NULL;
 
@@ -759,7 +854,7 @@ static bool parseAliasUndef(tokens_t *tokens, char *fileName, uint32_t lineNumbe
     return true;
 }
 
-static bool doInclude(tokens_t *tokens, uint32_t lineNumber)
+static bool doInclude(tokens_t *tokens)
 {
     FILE    *fd                = NULL;
     char     inputBuffer[2048] = {0};
@@ -869,12 +964,13 @@ static char *parseEscapeCharacters(const char *inputString)
     return strcpy(calloc(strlen(buf) + 1, sizeof(char)), buf);
 }
 
-static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, uint32_t *address)
+static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t *address)
 {
     uint32_t buf32           = 0;
     char    *parsedSetString = NULL;
     label_t *tmpLabel1       = NULL;
     label_t *tmpLabel2       = NULL;
+    bool     wasFloat        = false;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -897,7 +993,7 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
 
     if (0 == strcmp(tokens->tokens[0], INCLUDE_STR))
     {
-        return doInclude(tokens, lineNumber);
+        return doInclude(tokens);
     }
 
     if (0 == strcmp(tokens->tokens[0], RESERVE_STR))
@@ -908,15 +1004,21 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
             return false;
         }
 
-        if (false == parseLiteral(tokens->tokens[1], &buf32))
+        if (NULL == currentSection)
+        {
+            printf("%s:%u: reserve directive not in section\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (false == parseLiteral(tokens->tokens[1], &buf32, &wasFloat))
         {
             printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
             return false;
         }
 
-        if (NULL == currentSection)
+        if (wasFloat)
         {
-            printf("%s:%u: reserve directive not in section\n", inputFileName, lineNumber);
+            printf("%s:%u: cannot reserve fractional number of bytes\n", inputFileName, lineNumber);
             return false;
         }
 
@@ -932,15 +1034,15 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
             return false;
         }
 
+        if (NULL == currentSection)
+        {
+            printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
+            return false;
+        }
+
         if (1   == strlen(tokens->tokens[1]) &&
             '*' == tokens->tokens[1][0])
         {
-            if (NULL == currentSection)
-            {
-                printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
-                return false;
-            }
-
             parsedSetString = parseEscapeCharacters(tokens->tokens[2]);
             buf32 = strlen(parsedSetString) + 1;
             free(parsedSetString);
@@ -951,25 +1053,27 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
         if (1   == strlen(tokens->tokens[1]) &&
             '@' == tokens->tokens[1][0])
         {
-            if (NULL == currentSection)
-            {
-                printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
-                return false;
-            }
-
             *address += 4;
             return true;
         }
 
-        if (false == parseLiteral(tokens->tokens[1], &buf32))
+        if (false == parseLiteral(tokens->tokens[1], &buf32, &wasFloat))
         {
             printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
             return false;
         }
 
-        if (NULL == currentSection)
+        if (wasFloat)
         {
-            printf("%s:%u: set directive not in section\n", inputFileName, lineNumber);
+            printf("%s:%u: cannot set fractional number of bytes\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (buf32 != 4 &&
+            buf32 != 2 &&
+            buf32 != 1)
+        {
+            printf("%s:%u: sets of numeric literals must be 1, 2, or 4 bytes\n", inputFileName, lineNumber);
             return false;
         }
 
@@ -1029,7 +1133,7 @@ static bool parseDotDirectiveFirstPass(tokens_t *tokens, uint32_t lineNumber, ui
             return false;
         }
 
-        if (false == parseLabel(tokens->tokens[1], lineNumber, *address))
+        if (false == parseLabel(tokens->tokens[1], *address))
         {
             // Error already logged
             return false;
@@ -1177,7 +1281,7 @@ static bool completeSection()
     return true;
 }
 
-static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uint32_t lineNumber)
+static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address)
 {
     uint32_t              reserveSize     = 0;
     uint32_t              setValue        = 0;
@@ -1188,6 +1292,7 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
     label_t              *tmpLbl          = NULL;
     requiredLabel_t      *tmpReqLbl       = NULL;
     resolutionInstance_t *tmpResInst      = NULL;
+    bool                  wasFloat        = false;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -1210,7 +1315,7 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
 
     if (0 == strcmp(tokens->tokens[0], INCLUDE_STR))
     {
-        return doInclude(tokens, lineNumber);
+        return doInclude(tokens);
     }
 
     if (0 == strcmp(tokens->tokens[0], RESERVE_STR))
@@ -1221,9 +1326,15 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
             return false;
         }
 
-        if (false == parseLiteral(tokens->tokens[1], &reserveSize))
+        if (false == parseLiteral(tokens->tokens[1], &reserveSize, &wasFloat))
         {
             printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
+            return false;
+        }
+
+        if (wasFloat)
+        {
+            printf("%s:%u: cannot reserve fractional number of bytes\n", inputFileName, lineNumber);
             return false;
         }
 
@@ -1328,13 +1439,19 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
             return true;
         }
 
-        if (false == parseLiteral(tokens->tokens[1], &reserveSize))
+        if (false == parseLiteral(tokens->tokens[1], &reserveSize, &wasFloat))
         {
             printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[1]);
             return false;
         }
 
-        if (false == parseLiteral(tokens->tokens[2], &setValue))
+        if (wasFloat)
+        {
+            printf("%s:%u: cannot set fractional number of bytes\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (false == parseLiteral(tokens->tokens[2], &setValue, &wasFloat))
         {
             printf("%s:%u: could not parse literal \"%s\"\n", inputFileName, lineNumber, tokens->tokens[2]);
             return false;
@@ -1345,6 +1462,12 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
             reserveSize != 4)
         {
             printf("%s:%u: sets of numeric literals must be 1, 2, or 4 bytes\n", inputFileName, lineNumber);
+            return false;
+        }
+
+        if (wasFloat && reserveSize != 4)
+        {
+            printf("%s:%u: floats require 4 bytes to be reserved\n", inputFileName, lineNumber);
             return false;
         }
 
@@ -1432,162 +1555,92 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address, uin
     return false;
 }
 
-static bool parseMainInstructionSegment(tokens_t                *tokens, 
-                                        instructionDescriptor_t *descriptor,
-                                        bool                    *requiresArgAug,
-                                        uint32_t                 address,
-                                        uint32_t                 lineNumber)
+static bool parseRegselAndFlagConditions(tokens_t                *tokens,
+                                         instructionForm_e        instructionForm)
 {
-    uint32_t outputBuf          = 0;
-    uint8_t  minimumRegselCount = 0;
-    bool     isAlternateForm    = false;
-    form_e   form               = 0;
-    char    *literalArgument    = NULL;
-    label_t *label              = NULL;
-    uint32_t literalValue       = 0;
+    uint8_t byteOut = 0;
 
-    if (NULL == tokens         ||
-        NULL == descriptor     ||
-        NULL == requiresArgAug)
+    if (NULL == tokens)
     {
         INTERNAL_ERROR;
         return false;
     }
 
-    if (tokens->tokenCount - 1 != formArgCount[descriptor->primaryForm])
+    if (formArgCount[instructionForm] != tokens->tokenCount - 1)
     {
-        if (tokens->tokenCount - 1 > formArgCount[descriptor->primaryForm])
-        {
-            printf("%s:%u: too many arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
-        }
-        else
-        {
-            printf("%s:%u: too few arguments for instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
-        }
+        printf("%s:%u: expected %hhu arguments for \"%s\"\n",
+               inputFileName, lineNumber, tokens->tokenCount, tokens->tokens[0]);
         return false;
     }
 
-    if (true == descriptor->hasAlternateForm)
+    // Anything form 1 won't have regsel or flag conditions
+    if (instructionForm < INS_FORM_2)
     {
-        minimumRegselCount = formRegselCount[descriptor->alternateForm];
-    }
-    else
-    {
-        minimumRegselCount = formRegselCount[descriptor->primaryForm];
+        return true;
     }
 
-    switch (minimumRegselCount)
+    // First byte //
+
+    // Regsel 1
+    if (formRegselCount[instructionForm] >= 1)
     {
-        case 3:
-            if (false == isValidRegsel(tokens->tokens[3]))
-            {
-                printf("%s:%u: argument #3 for \"%s\" must be a regsel\n", inputFileName, lineNumber, tokens->tokens[0]);
-                return false;
-            }
-
-            outputBuf |= ((uint32_t) getRegsel(tokens->tokens[3])) << REGSEL_3_OFFSET;
-
-        case 2:
-            if (false == isValidRegsel(tokens->tokens[2]))
-            {
-                printf("%s:%u: argument #2 for \"%s\" must be a regsel\n", inputFileName, lineNumber, tokens->tokens[0]);
-                return false;
-            }
-
-            outputBuf |= ((uint32_t) getRegsel(tokens->tokens[2])) << REGSEL_2_OFFSET;
-
-        case 1:
-            if (false == isValidRegsel(tokens->tokens[1]))
-            {
-                printf("%s:%u: argument #1 for \"%s\" must be a regsel\n", inputFileName, lineNumber, tokens->tokens[0]);
-                return false;
-            }
-
-            outputBuf |= ((uint32_t) getRegsel(tokens->tokens[1])) << REGSEL_1_OFFSET;
-
-        default:
-            break;
-    }
-
-    if (true == descriptor->hasAlternateForm)
-    {
-        isAlternateForm = true;
-        switch (formRegselCount[descriptor->primaryForm])
+        if (false == isValidRegsel(tokens->tokens[1]))
         {
-            case 3:
-                if (true == isValidRegsel(tokens->tokens[3]))
-                {
-                    outputBuf |= ((uint32_t) getRegsel(tokens->tokens[3])) << REGSEL_3_OFFSET;
-                    isAlternateForm = false;
-                }
-                break;
-            
-            case 2:
-                if (true == isValidRegsel(tokens->tokens[2]))
-                {
-                    outputBuf |= ((uint32_t) getRegsel(tokens->tokens[2])) << REGSEL_2_OFFSET;
-                    isAlternateForm = false;
-                }
-                break;
-
-            case 1:
-                if (true == isValidRegsel(tokens->tokens[1]))
-                {
-                    outputBuf |= ((uint32_t) getRegsel(tokens->tokens[1])) << REGSEL_1_OFFSET;
-                    isAlternateForm = false;
-                }
-                break;
-        }
-    }
-
-    if (isAlternateForm)
-    {
-        outputBuf      |= descriptor->opCodeAlternateVal << OP_CODE_OFFSET;
-        *requiresArgAug = descriptor->alternateFormUsesArgAugment;
-        form            = descriptor->alternateForm;
-    }
-    else
-    {
-        outputBuf      |= descriptor->opCodePrimaryVal << OP_CODE_OFFSET;
-        *requiresArgAug = false;
-        form            = descriptor->primaryForm;
-    }
-
-    if (formArgCount[form] != formRegselCount[form])
-    {
-        literalArgument = tokens->tokens[tokens->tokenCount - 1];
-
-        label = getLabel(currentLabelList, literalArgument);
-
-        if (NULL == label)
-        {
-            if (false == parseLiteral(literalArgument, &literalValue))
-            {
-                printf("%s:%u: could not resolve argument \"%s\"\n", inputFileName, lineNumber, literalArgument);
-                return false;
-            }
-        }
-        else
-        {
-            if (false == descriptor->takesLabel)
-            {
-                printf("%s:%u: cannot use a label as an argument for \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
-                return false;
-            }
-            literalValue = label->address - address;
-        }
-
-        if (literalValue > formMaxArgSize[form])
-        {
-            printf("%s:%u: \"%s\" does not fit as an argument for \"%s\"\n",
-                   inputFileName, lineNumber, literalArgument, tokens->tokens[0]);
+            printf("%s:%u: expected regsel for the 1st argument of \"%s\"\n",
+                    inputFileName, lineNumber, tokens->tokens[0]);
             return false;
         }
 
-        outputBuf |= literalValue;
+        byteOut = getRegsel(tokens->tokens[1]);
     }
 
-    if (1 != fwrite(&outputBuf, 4, 1, outputFile))
+    // Regsel 2
+    if (formRegselCount[instructionForm] >= 2)
+    {
+        if (false == isValidRegsel(tokens->tokens[2]))
+        {
+            printf("%s:%u: expected regsel for the 2nd argument of \"%s\"\n",
+                    inputFileName, lineNumber, tokens->tokens[0]);
+            return false;
+        }
+
+        byteOut |= getRegsel(tokens->tokens[2]) << 4;
+    }
+
+    // TODO flag condition for byte 1
+
+    if (1 != fwrite(&byteOut, 1, 1, outputFile))
+    {
+        printf("Error writing to \"%s\"\n", outputFileName);
+        return false;
+    }
+
+    // Bail if we don't need a 2nd byte
+    if ((instructionForm >= INS_FORM_2 &&
+         instructionForm <= INS_FORM_3C) ||
+        (instructionForm >= INS_FORM_5 &&
+         instructionForm <= INS_FORM_6C))
+    {
+        return true;
+    }
+    // Second Byte //
+    byteOut = 0;
+
+    // Regsel 3
+    if (formRegselCount[instructionForm] >= 3)
+    {
+        if (false == isValidRegsel(tokens->tokens[3]))
+        {
+            printf("%s:%u: expected regsel for the 3rd argument of \"%s\"\n",
+                    inputFileName, lineNumber, tokens->tokens[0]);
+            return false;
+        }
+
+        byteOut = getRegsel(tokens->tokens[3]);
+    }
+
+    // TODO flag condition for byte 2
+    if (1 != fwrite(&byteOut, 1, 1, outputFile))
     {
         printf("Error writing to \"%s\"\n", outputFileName);
         return false;
@@ -1596,16 +1649,40 @@ static bool parseMainInstructionSegment(tokens_t                *tokens,
     return true;
 }
 
-static bool parseArgumentAugment(tokens_t                *tokens,
-                                 uint32_t                 address,
-                                 instructionDescriptor_t *descriptor,
-                                 uint32_t                 lineNumber)
+static bool parseInstructionArgument(tokens_t                *tokens,
+                                     uint32_t                 address,
+                                     instructionDescriptor_t *descriptor,
+                                     instructionForm_e        instructionForm)
 {
     char                 *literalArgument    = NULL;
     label_t              *label              = NULL;
     requiredLabel_t      *requiredLabel      = NULL;
     resolutionInstance_t *resolutionInstance = NULL;
-    uint32_t              literalValue       = 0;
+    uint32_t              literalValue32     = 0;
+    uint16_t              literalValue16     = 0;
+    uint8_t               literalValue8      = 0;
+    bool                  wasFloat           = false;
+
+    if (NULL == tokens     ||
+        NULL == descriptor ||
+        1    >  tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (formArgCount[instructionForm] != tokens->tokenCount - 1)
+    {
+        printf("%s:%u: expected %hhu arguments for \"%s\"\n",
+               inputFileName, lineNumber, tokens->tokenCount, tokens->tokens[0]);
+        return false;
+    }
+
+    if (0 == instructionForm % 4)
+    {
+        // Base form, no argument
+        return true;
+    }
 
     literalArgument = tokens->tokens[tokens->tokenCount - 1];
 
@@ -1613,7 +1690,7 @@ static bool parseArgumentAugment(tokens_t                *tokens,
 
     if (NULL == label)
     {
-        if (false == parseLiteral(literalArgument, &literalValue))
+        if (false == parseLiteral(literalArgument, &literalValue32, &wasFloat))
         {
             if (false == link)
             {
@@ -1629,37 +1706,113 @@ static bool parseArgumentAugment(tokens_t                *tokens,
                 return false;
             }
 
+            // Make sure we're using a word sub-form
+            if (1 != instructionForm % 4)
+            {
+                INTERNAL_ERROR;
+                return false;
+            }
+
+            // TODO support absolute addresses
             resolutionInstance = addNewResolutionInstance(&(requiredLabel->instances));
 
             resolutionInstance->instructionOffset = address;
 
+            // Injection offset is the same as the base instruction size without
+            // an instruction argument. The / 4 * 4 snaps us back to the base
             resolutionInstance->injectionOffset =
-                    descriptor->hasInstructionAugment ? 5 : 4;
+                    formInstructionSize[(instructionForm / 4) * 4];
         }
     }
     else
     {
-        if (false == descriptor->takesLabel)
+        if (false == descriptor->labelsAllowed)
         {
             printf("%s:%u: cannot use a label as an argument for \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
             return false;
         }
-        literalValue = label->address - address;
+
+        // Make sure we're using a word sub-form
+        if (1 != instructionForm % 4)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+        // TODO support absolute addresses
+        literalValue32 = label->address - address;
     }
 
-    if (1 != fwrite(&literalValue, 4, 1, outputFile))
+    switch (instructionForm % 4)
     {
-        printf("Error writing to \"%s\"\n", outputFileName);
-        return false;
+        case 1:
+        {
+            // Word sub-form
+            if (1 != fwrite(&literalValue32, 4, 1, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileName);
+                return false;
+            }
+            break;
+        }
+        case 2:
+        {
+            // Short sub-form
+            if (wasFloat)
+            {
+                INTERNAL_ERROR;
+                return false;
+            }
+            if (literalValue32 > 0xFFFF &&
+                literalValue32 < 0xFFFF8000)
+            {
+                printf("%s:%u: value too large for \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+                return false;
+            }
+
+            literalValue16 = literalValue32 & 0xFFFF;
+
+            if (1 != fwrite(&literalValue16, 2, 1, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileName);
+                return false;
+            }
+            break;
+        }
+        case 3:
+        {
+            // Character sub-form
+            if (wasFloat)
+            {
+                INTERNAL_ERROR;
+                return false;
+            }
+            if (literalValue8 > 0xFF &&
+                literalValue8 < 0xFFFFFF80)
+            {
+                printf("%s:%u: value too large for \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+                return false;
+            }
+
+            literalValue8 = literalValue32 & 0xFF;
+
+            if (1 != fwrite(&literalValue8, 1, 1, outputFile))
+            {
+                printf("Error writing to \"%s\"\n", outputFileName);
+                return false;
+            }
+            break;
+        }
     }
 
     return true;
 }
 
-static bool parseInstruction(tokens_t *tokens, uint32_t *address, uint32_t lineNumber)
+static bool parseInstruction(tokens_t *tokens, uint32_t *address)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
-    bool                     requiresArgAugment = false;
+    instructionForm_e        instructionForm    = 0;
+    int                      rc                 = 0;
+    uint8_t                  opCode             = 0;
 
     if (NULL == tokens ||
         0    == tokens->tokenCount)
@@ -1672,44 +1825,54 @@ static bool parseInstruction(tokens_t *tokens, uint32_t *address, uint32_t lineN
     {
         descriptorInstance = &(instructionDescriptors[i]);
 
-        if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr))
+        if (0 == strcmp(tokens->tokens[0], descriptorInstance->instructionStr) ||
+            (descriptorInstance->useWildcards &&
+             simpleRegex(descriptorInstance->instructionStr, tokens->tokens[0])))
         {
-            if (false == parseMainInstructionSegment(tokens,
-                                                     descriptorInstance, 
-                                                     &requiresArgAugment,
-                                                     *address,
-                                                     lineNumber))
+            if (NULL == descriptorInstance->formResolverFunction)
             {
+                // TODO
+                INTERNAL_ERROR;
                 return false;
             }
+            else
+            {
+                instructionForm = descriptorInstance->formResolverFunction(tokens);
+                if (INS_FORM_ERR == instructionForm)
+                {
+                    return false;
+                }
 
-            if (descriptorInstance->hasInstructionAugment &&
-                1 != fwrite(&(descriptorInstance->instructionAugment), 1, 1, outputFile))
+                if (NULL == descriptorInstance->opCodeResolver)
+                {
+                    opCode = descriptorInstance->opCode;
+                }
+                else
+                {
+                    rc = descriptorInstance->opCodeResolver(tokens, instructionForm);
+
+                    if (-1 == rc)
+                    {
+                        return false;
+                    }
+
+                    opCode = rc;
+                }
+            }
+
+            if (1 != fwrite(&opCode, 1, 1, outputFile))
             {
                 printf("Error writing to \"%s\"\n", outputFileName);
                 return false;
             }
 
-            if (requiresArgAugment &&
-                false == parseArgumentAugment(tokens,
-                                              *address,
-                                              descriptorInstance,
-                                              lineNumber))
+            if (false == parseRegselAndFlagConditions(tokens, instructionForm) ||
+                false == parseInstructionArgument(tokens, *address, descriptorInstance, instructionForm))
             {
                 return false;
             }
 
-            *address += 4;
-            
-            if (descriptorInstance->hasInstructionAugment)
-            {
-                *address += 1;
-            }
-
-            if (requiresArgAugment)
-            {
-                *address += 4;
-            }
+            *address += formInstructionSize[instructionForm];
 
             return true;
         }
@@ -1723,11 +1886,11 @@ static bool parseInstruction(tokens_t *tokens, uint32_t *address, uint32_t lineN
 static bool firstPass()
 {
     char     inputBuffer[2048] = {0};
-    uint32_t lineNumber        = 0;
     uint32_t address           = 0;
     int      rc                = 0;
     tokens_t tokens            = {0};
 
+    lineNumber = 0;
     currentSection = NULL;
 
     if (false == link)
@@ -1772,7 +1935,7 @@ static bool firstPass()
                 return false;
             }
 
-            if (false == parseLabel(&(tokens.tokens[0][1]), lineNumber, address))
+            if (false == parseLabel(&(tokens.tokens[0][1]), address))
             {
                 freeTokensContents(&tokens);
                 return false;
@@ -1783,7 +1946,7 @@ static bool firstPass()
         if ('.' == tokens.tokens[0][0])
         {
             // Is a dot directive
-            if (false == parseDotDirectiveFirstPass(&tokens, lineNumber, &address))
+            if (false == parseDotDirectiveFirstPass(&tokens, &address))
             {
                 freeTokensContents(&tokens);
                 return false;
@@ -1800,7 +1963,7 @@ static bool firstPass()
             return false;
         }
 
-        rc = getInstructionSize(&tokens, lineNumber);
+        rc = getInstructionSize(&tokens);
 
         if (-1 == rc)
         {
@@ -1821,8 +1984,9 @@ static bool secondPass()
 {
     char     inputBuffer[2048] = {0};
     tokens_t tokens            = {0};
-    uint32_t lineNumber        = 0;
     uint32_t address           = 0;
+
+    lineNumber = 0;
 
     freeAliasListContents(&aliasList);
 
@@ -1895,7 +2059,7 @@ static bool secondPass()
         if ('.' == tokens.tokens[0][0])
         {
             // Is dot directive
-            if (false == parseDotDirectiveSecondPass(&tokens, &address, lineNumber))
+            if (false == parseDotDirectiveSecondPass(&tokens, &address))
             {
                 freeTokensContents(&tokens);
                 return false;
@@ -1906,7 +2070,7 @@ static bool secondPass()
 
         resolveAliases(&aliasList, &tokens);
 
-        if (false == parseInstruction(&tokens, &address, lineNumber))
+        if (false == parseInstruction(&tokens, &address))
         {
             freeTokensContents(&tokens);
             return false;

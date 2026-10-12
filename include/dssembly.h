@@ -23,28 +23,10 @@
 #define SECTION_STR    ".section"
 #define EXPORT_STR     ".export"
 #define REQUIRES_STR   ".requires"
-#define OP_CODE_MAX_LEN 32
-
-#define OP_CODE_OFFSET 24
-#define REGSEL_1_OFFSET 20
-#define REGSEL_2_OFFSET 16
-#define REGSEL_3_OFFSET 12
 
 #define INTERNAL_ERROR printf("Internal error: %s:%d\n", __FUNCTION__, __LINE__)
 
 bool dssembler(char *inputFileName, char *outputFileName, bool linkedMode);
-
-typedef enum
-{
-    form_1 = 0,
-    form_2 = 1,
-    form_3 = 2,
-    form_4 = 3,
-    form_5 = 4,
-    form_6 = 5,
-    form_7 = 6
-} form_e;
-
 
 typedef struct label_t
 {
@@ -134,28 +116,139 @@ typedef struct
     alias_t *last;
 } aliasList_t;
 
-typedef struct
+typedef enum
 {
-    char    instructionStr[OP_CODE_MAX_LEN];
-    uint8_t opCodePrimaryVal;
-    form_e  primaryForm;
+    INS_FORM_ERR = -1,
+    INS_FORM_1   = 0,
+    INS_FORM_1W  = 1,
+    INS_FORM_1H  = 2,
+    INS_FORM_1C  = 3,
+    INS_FORM_2   = 4,
+    INS_FORM_2W  = 5,
+    INS_FORM_2H  = 6,
+    INS_FORM_2C  = 7,
+    INS_FORM_3   = 8,
+    INS_FORM_3W  = 9,
+    INS_FORM_3H  = 10,
+    INS_FORM_3C  = 11,
+    INS_FORM_4   = 12,
+    INS_FORM_4W  = 13,
+    INS_FORM_4H  = 14,
+    INS_FORM_4C  = 15,
+    INS_FORM_5   = 16,
+    INS_FORM_5W  = 17,
+    INS_FORM_5H  = 18,
+    INS_FORM_5C  = 19,
+    INS_FORM_6   = 20,
+    INS_FORM_6W  = 21,
+    INS_FORM_6H  = 22,
+    INS_FORM_6C  = 23,
+    INS_FORM_7   = 24,
+    INS_FORM_7W  = 25,
+    INS_FORM_7H  = 26,
+    INS_FORM_7C  = 27,
+    INS_FORM_8   = 28,
+    INS_FORM_8W  = 29,
+    INS_FORM_8H  = 30,
+    INS_FORM_8C  = 31
+} instructionForm_e;
 
-    bool    hasAlternateForm;
-    uint8_t opCodeAlternateVal;
-    form_e  alternateForm;
+typedef enum
+{
+    INS_FORM_1_BIT  =  1 << INS_FORM_1,
+    INS_FORM_1W_BIT = (1 << INS_FORM_1W),
+    INS_FORM_1H_BIT = (1 << INS_FORM_1H),
+    INS_FORM_1C_BIT = (1 << INS_FORM_1C),
+    INS_FORM_2_BIT  = (1 << INS_FORM_2),
+    INS_FORM_2W_BIT = (1 << INS_FORM_2W),
+    INS_FORM_2H_BIT = (1 << INS_FORM_2H),
+    INS_FORM_2C_BIT = (1 << INS_FORM_2C),
+    INS_FORM_3_BIT  = (1 << INS_FORM_3),
+    INS_FORM_3W_BIT = (1 << INS_FORM_3W),
+    INS_FORM_3H_BIT = (1 << INS_FORM_3H),
+    INS_FORM_3C_BIT = (1 << INS_FORM_3C),
+    INS_FORM_4_BIT  = (1 << INS_FORM_4),
+    INS_FORM_4W_BIT = (1 << INS_FORM_4W),
+    INS_FORM_4H_BIT = (1 << INS_FORM_4H),
+    INS_FORM_4C_BIT = (1 << INS_FORM_4C),
+    INS_FORM_5_BIT  = (1 << INS_FORM_5),
+    INS_FORM_5W_BIT = (1 << INS_FORM_5W),
+    INS_FORM_5H_BIT = (1 << INS_FORM_5H),
+    INS_FORM_5C_BIT = (1 << INS_FORM_5C),
+    INS_FORM_6_BIT  = (1 << INS_FORM_6),
+    INS_FORM_6W_BIT = (1 << INS_FORM_6W),
+    INS_FORM_6H_BIT = (1 << INS_FORM_6H),
+    INS_FORM_6C_BIT = (1 << INS_FORM_6C),
+    INS_FORM_7_BIT  = (1 << INS_FORM_7),
+    INS_FORM_7W_BIT = (1 << INS_FORM_7W),
+    INS_FORM_7H_BIT = (1 << INS_FORM_7H),
+    INS_FORM_7C_BIT = (1 << INS_FORM_7C),
+    INS_FORM_8_BIT  = (1 << INS_FORM_8),
+    INS_FORM_8W_BIT = (1 << INS_FORM_8W),
+    INS_FORM_8H_BIT = (1 << INS_FORM_8H),
+    INS_FORM_8C_BIT = (1 << INS_FORM_8C)
+} instructionFormBitmap_e;
 
-    bool    hasInstructionAugment;
-    uint8_t instructionAugment;
-
-    bool    alternateFormUsesArgAugment;
-    bool    takesLabel;
-} instructionDescriptor_t;
+typedef enum
+{
+    FLAG_AL = 0,
+    FLAG_EQ = 1,
+    FLAG_NE = 2,
+    FLAG_HI = 3,
+    FLAG_HS = 4,
+    FLAG_LS = 5,
+    FLAG_LO = 6,
+    FLAG_GT = 7,
+    FLAG_GE = 8,
+    FLAG_LE = 9,
+    FLAG_LT = 10,
+    FLAG_MI = 11,
+    FLAG_PZ = 12,
+    FLAG_OV = 13,
+    FLAG_NC = 14
+} flagCondition_e;
 
 typedef struct
 {
     char   *tokens[MAX_TOKENS];
     uint8_t tokenCount;
 } tokens_t;
+
+typedef instructionForm_e (*formResolver_t)         (tokens_t*);
+typedef int               (*opCodeResolver_t)       (tokens_t*,
+                                                     instructionForm_e);
+typedef flagCondition_e   (*flagConditionResolver_t)(char *);
+
+#define INSTRUCTION_STR_MAX_LEN 16
+typedef struct
+{
+    char                    instructionStr[INSTRUCTION_STR_MAX_LEN];
+    bool                    useWildcards;
+    instructionFormBitmap_e forms;
+    formResolver_t          formResolverFunction;
+    uint8_t                 opCode;
+    opCodeResolver_t        opCodeResolver;
+    flagConditionResolver_t flagConditionResolver;
+    bool                    labelsAllowed;
+} instructionDescriptor_t;
+
+typedef enum
+{
+    LWM_W  = 0,
+    LWM_H  = 1,
+    LWM_SH = 2,
+    LWM_C  = 3,
+    LWM_SC = 4
+} loadWidthModifiers_e;
+
+typedef enum
+{
+    ADDRESSING_MODE_AB = 0,
+    ADDRESSING_MODE_PC = 1,
+    ADDRESSING_MODE_OA = 2,
+    ADDRESSING_MODE_OB = 3,
+    ADDRESSING_MODE_OC = 4
+} addressingMode_e;
 
 typedef struct
 {
@@ -208,3 +301,5 @@ bool parseTokens       (char* inputBuffer, tokens_t *tokens);
 bool isAlphanumericString(char *input);
 
 void freeDinkerConfigContents(dinkerConfig_t *config);
+
+bool simpleRegex(char *template, char *target);
