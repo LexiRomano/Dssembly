@@ -155,21 +155,22 @@ typedef enum
 
 typedef enum
 {
-    FLAG_AL = 0,
-    FLAG_EQ = 1,
-    FLAG_NE = 2,
-    FLAG_HI = 3,
-    FLAG_HS = 4,
-    FLAG_LS = 5,
-    FLAG_LO = 6,
-    FLAG_GT = 7,
-    FLAG_GE = 8,
-    FLAG_LE = 9,
-    FLAG_LT = 10,
-    FLAG_MI = 11,
-    FLAG_PZ = 12,
-    FLAG_OV = 13,
-    FLAG_NC = 14
+    FLAG_ERR = -1,
+    FLAG_AL  = 0,
+    FLAG_EQ  = 1,
+    FLAG_NE  = 2,
+    FLAG_HI  = 3,
+    FLAG_HS  = 4,
+    FLAG_LS  = 5,
+    FLAG_LO  = 6,
+    FLAG_GT  = 7,
+    FLAG_GE  = 8,
+    FLAG_LE  = 9,
+    FLAG_LT  = 10,
+    FLAG_MI  = 11,
+    FLAG_PZ  = 12,
+    FLAG_OV  = 13,
+    FLAG_NV  = 14
 } flagCondition_e;
 
 typedef struct

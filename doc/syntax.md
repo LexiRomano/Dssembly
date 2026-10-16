@@ -404,7 +404,7 @@ Gets an address which can be resolved relative to an offset register. The addres
 | mi   | negative            | N==1           |
 | pz   | positive or zero    | N==0           |
 | ov   | signed overflow     | V==1           |
-| nc   | no signed overflow  | V==0           |
+| nv   | no signed overflow  | V==0           |
 
 ## Example Code
 
