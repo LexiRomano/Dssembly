@@ -155,42 +155,6 @@ typedef enum
 
 typedef enum
 {
-    INS_FORM_1_BIT  =  1 << INS_FORM_1,
-    INS_FORM_1W_BIT = (1 << INS_FORM_1W),
-    INS_FORM_1H_BIT = (1 << INS_FORM_1H),
-    INS_FORM_1C_BIT = (1 << INS_FORM_1C),
-    INS_FORM_2_BIT  = (1 << INS_FORM_2),
-    INS_FORM_2W_BIT = (1 << INS_FORM_2W),
-    INS_FORM_2H_BIT = (1 << INS_FORM_2H),
-    INS_FORM_2C_BIT = (1 << INS_FORM_2C),
-    INS_FORM_3_BIT  = (1 << INS_FORM_3),
-    INS_FORM_3W_BIT = (1 << INS_FORM_3W),
-    INS_FORM_3H_BIT = (1 << INS_FORM_3H),
-    INS_FORM_3C_BIT = (1 << INS_FORM_3C),
-    INS_FORM_4_BIT  = (1 << INS_FORM_4),
-    INS_FORM_4W_BIT = (1 << INS_FORM_4W),
-    INS_FORM_4H_BIT = (1 << INS_FORM_4H),
-    INS_FORM_4C_BIT = (1 << INS_FORM_4C),
-    INS_FORM_5_BIT  = (1 << INS_FORM_5),
-    INS_FORM_5W_BIT = (1 << INS_FORM_5W),
-    INS_FORM_5H_BIT = (1 << INS_FORM_5H),
-    INS_FORM_5C_BIT = (1 << INS_FORM_5C),
-    INS_FORM_6_BIT  = (1 << INS_FORM_6),
-    INS_FORM_6W_BIT = (1 << INS_FORM_6W),
-    INS_FORM_6H_BIT = (1 << INS_FORM_6H),
-    INS_FORM_6C_BIT = (1 << INS_FORM_6C),
-    INS_FORM_7_BIT  = (1 << INS_FORM_7),
-    INS_FORM_7W_BIT = (1 << INS_FORM_7W),
-    INS_FORM_7H_BIT = (1 << INS_FORM_7H),
-    INS_FORM_7C_BIT = (1 << INS_FORM_7C),
-    INS_FORM_8_BIT  = (1 << INS_FORM_8),
-    INS_FORM_8W_BIT = (1 << INS_FORM_8W),
-    INS_FORM_8H_BIT = (1 << INS_FORM_8H),
-    INS_FORM_8C_BIT = (1 << INS_FORM_8C)
-} instructionFormBitmap_e;
-
-typedef enum
-{
     FLAG_AL = 0,
     FLAG_EQ = 1,
     FLAG_NE = 2,
@@ -224,7 +188,7 @@ typedef struct
 {
     char                    instructionStr[INSTRUCTION_STR_MAX_LEN];
     bool                    useWildcards;
-    instructionFormBitmap_e forms;
+    instructionForm_e       form;
     formResolver_t          formResolverFunction;
     uint8_t                 opCode;
     opCodeResolver_t        opCodeResolver;
@@ -243,12 +207,39 @@ typedef enum
 
 typedef enum
 {
+    SWM_W  = 0,
+    SWM_H  = 1,
+    SWM_C  = 2,
+} storWidthModifiers_e;
+
+typedef enum
+{
     ADDRESSING_MODE_AB = 0,
     ADDRESSING_MODE_PC = 1,
     ADDRESSING_MODE_OA = 2,
     ADDRESSING_MODE_OB = 3,
     ADDRESSING_MODE_OC = 4
 } addressingMode_e;
+
+typedef enum
+{
+    MATH_ADDX,
+    MATH_SUBX,
+    MATH_MULX,
+    MATH_DIVX,
+    MATH_MOD,
+    MATH_AND,
+    MATH_OR,
+    MATH_XOR,
+    MATH_NOT,
+    MATH_BSLT,
+    MATH_BSLC,
+    MATH_BSRT,
+    MATH_BSRC,
+    MATH_FTOI,
+    MATH_UITOF,
+    MATH_SITOF
+} mathOperations_e;
 
 typedef struct
 {
