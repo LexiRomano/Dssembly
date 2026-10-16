@@ -21,18 +21,51 @@ static instructionForm_e moveFormResolver(tokens_t *tokens);
 static int moveOpCodeResolver(tokens_t         *tokens,
                               instructionForm_e instructionForm);
 
-static instructionForm_e loadFormResolver(tokens_t *tokens);
+static instructionForm_e lssFormResolver(tokens_t *tokens);
 
 static int loadOpCodeResolver(tokens_t         *tokens,
                               instructionForm_e instructionForm);
 
+static int storOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm);
+
+static int swapOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm);
+
+static instructionForm_e math3FormResolver(tokens_t *tokens);
+
+static int math3OpCodeResolver(tokens_t         *tokens,
+                               instructionForm_e instructionForm);
+
 static instructionDescriptor_t instructionDescriptors[] =
 {
-    {"move",     false, 0, moveFormResolver, 0, moveOpCodeResolver, NULL, true},
-    {"load.pc",  true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, true},
-    {"load..pc", true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, true},
-    {"load...",  true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, false},
-    {"load....", true,  0, loadFormResolver, 0, loadOpCodeResolver, NULL, false},
+    {"move",     false, 0, moveFormResolver,  0, moveOpCodeResolver,  NULL, true},
+    {"load.pc",  true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, true},
+    {"load..pc", true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, true},
+    {"load...",  true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, false},
+    {"load....", true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, false},
+    {"stor.pc",  true,  0, lssFormResolver,   0, storOpCodeResolver,  NULL, true},
+    {"stor...",  true,  0, lssFormResolver,   0, storOpCodeResolver,  NULL, false},
+    {"swap.pc",  true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, true},
+    {"swap..pc", true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, true},
+    {"swap...",  true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, false},
+    {"swap....", true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, false},
+    {"add.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"sub.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"mul.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"div.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"mod",      false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"and",      false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"or",       false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"xor",      false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"bslt",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"bslc",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"bsrt",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"bsrc",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
+    {"not",      false, INS_FORM_3, NULL,     0x91, NULL,             NULL, false},
+    {"ftoi",     false, INS_FORM_3, NULL,     0xB6, NULL,             NULL, false},
+    {"uitof",    false, INS_FORM_3, NULL,     0xB7, NULL,             NULL, false},
+    {"sitof",    false, INS_FORM_3, NULL,     0xB8, NULL,             NULL, false},
 };
 
 static char regselDescriptors[][3] = 
@@ -580,7 +613,8 @@ static int moveOpCodeResolver(tokens_t         *tokens,
     return -1;
 }
 
-static instructionForm_e loadFormResolver(tokens_t *tokens)
+// Load, stor, swap
+static instructionForm_e lssFormResolver(tokens_t *tokens)
 {
     if (NULL == tokens ||
         1    >  tokens->tokenCount)
@@ -623,35 +657,31 @@ static int loadOpCodeResolver(tokens_t         *tokens,
         return -1;
     }
 
-    // Skip over 'load' and leave us with the xx part
+    // Skip over 'load' or 'swap' and leave us with the xx part
     instructionNameShift = tokens->tokens[0] + 4;
 
     // Getting the width modifier
-    if ('w' == instructionNameShift[0])
+    if (0 == strncmp("w", instructionNameShift, 1))
     {
         lwm = LWM_W;
         instructionNameShift += 1;
     }
-    else if ('h' == instructionNameShift[0])
+    else if (0 == strncmp("h", instructionNameShift, 1))
     {
         lwm = LWM_H;
         instructionNameShift += 1;
     }
-    else if ('\0' != instructionNameShift[0] &&
-             's'  == instructionNameShift[0] &&
-             'h'  == instructionNameShift[1])
+    else if (0 == strncmp("sh", instructionNameShift, 2))
     {
         lwm = LWM_SH;
         instructionNameShift += 2;
     }
-    else if ('c' == instructionNameShift[0])
+    else if (0 == strncmp("c", instructionNameShift, 1))
     {
         lwm = LWM_C;
         instructionNameShift += 1;
     }
-    else if ('\0' != instructionNameShift[0] &&
-             's'  == instructionNameShift[0] &&
-             'c'  == instructionNameShift[1])
+    else if (0 == strncmp("sc", instructionNameShift, 2))
     {
         lwm = LWM_SH;
         instructionNameShift += 2;
@@ -663,12 +693,6 @@ static int loadOpCodeResolver(tokens_t         *tokens,
     }
 
     // Getting the addressing mode
-    if (2 != strlen(instructionNameShift))
-    {
-        printf("%s:%u: unknown instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
-        return -1;
-    }
-
     if (0 == strcmp(instructionNameShift, "ab"))
     {
         addressingMode = ADDRESSING_MODE_AB;
@@ -702,12 +726,394 @@ static int loadOpCodeResolver(tokens_t         *tokens,
     return 0x20 + lwm * 5 + addressingMode;
 }
 
+static int storOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm)
+{
+    char                *instructionNameShift = NULL;
+    storWidthModifiers_e swm                  = 0;
+    addressingMode_e     addressingMode       = 0;
+
+    if (NULL == tokens ||
+        1    >  tokens->tokenCount)
+    {
+        return -1;
+    }
+
+    if (3 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 2 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    // Skip over 'stor' and leave us with the xx part
+    instructionNameShift = tokens->tokens[0] + 4;
+
+    // Getting the width modifier
+    if (0 == strncmp("w", instructionNameShift, 1))
+    {
+        swm = SWM_W;
+        instructionNameShift += 1;
+    }
+    else if (0 == strncmp("h", instructionNameShift, 1))
+    {
+        swm = SWM_H;
+        instructionNameShift += 1;
+    }
+    else if (0 == strncmp("c", instructionNameShift, 1))
+    {
+        swm = SWM_C;
+        instructionNameShift += 1;
+    }
+    else
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    // Getting the addressing mode
+    if (0 == strcmp(instructionNameShift, "ab"))
+    {
+        addressingMode = ADDRESSING_MODE_AB;
+    }
+    else if (0 == strcmp(instructionNameShift, "pc"))
+    {
+        addressingMode = ADDRESSING_MODE_PC;
+    }
+    else if (0 == strcmp(instructionNameShift, "oa"))
+    {
+        addressingMode = ADDRESSING_MODE_OA;
+    }
+    else if (0 == strcmp(instructionNameShift, "ob"))
+    {
+        addressingMode = ADDRESSING_MODE_OB;
+    }
+    else if (0 == strcmp(instructionNameShift, "oc"))
+    {
+        addressingMode = ADDRESSING_MODE_OC;
+    }
+    else
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    if (INS_FORM_3 == instructionForm)
+    {
+        return 0x39 + swm * 5 + addressingMode;
+    }
+    return 0x48 + swm * 5 + addressingMode;
+}
+
+static int swapOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm)
+{
+    int rc = 0;
+
+    rc = loadOpCodeResolver(tokens, instructionForm);
+
+    if (-1 == rc)
+    {
+        return -1;
+    }
+
+    // Difference between load and swap:
+    // 0xCE - 0x07 = 0xC7
+    return 0xC7 + rc;
+}
+
+static instructionForm_e math3FormResolver(tokens_t *tokens)
+{
+    uint32_t parsedLiteral = 0;
+    bool     isFloat       = false;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return INS_FORM_ERR;
+    }
+
+    if (4 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 3 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (false == isValidRegsel(tokens->tokens[1]))
+    {
+        printf("%s:%u: \"%s\" requires argument 1 to be a valid regsel\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (false == isValidRegsel(tokens->tokens[2]))
+    {
+        printf("%s:%u: \"%s\" requires argument 1 to be a valid regsel\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[3]))
+    {
+        return INS_FORM_4;
+    }
+
+    if (parseLiteral(tokens->tokens[3], &parsedLiteral, &isFloat))
+    {
+        if (isFloat)
+        {
+            return INS_FORM_3W;
+        }
+
+        if (parsedLiteral <= 0xFF ||
+            parsedLiteral >= 0xFFFFFF80)
+        {
+            return INS_FORM_3C;
+        }
+
+        if (parsedLiteral <= 0xFFFF ||
+            parsedLiteral >= 0xFFFF8000)
+        {
+            return INS_FORM_3H;
+        }
+    }
+
+    printf("%s:%u: could not parse literal \"%s\"\n",
+               inputFileName, lineNumber, tokens->tokens[3]);
+    return INS_FORM_ERR;
+}
+
+static int math3OpCodeResolver(tokens_t         *tokens,
+                               instructionForm_e instructionForm)
+{
+    mathOperations_e operation           = 0;
+    uint8_t          baseCode            = 0;
+    bool             lookForFloatVariant = false;
+    bool             wasFloatVariant     = false;
+    uint32_t         parsedLiteral       = 0;
+    bool             literalIsFloat      = false;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (0 == strncmp("add", tokens->tokens[0], 3) &&
+        4 == strlen(tokens->tokens[0]))
+    {
+        operation           = MATH_ADDX;
+        baseCode            = 0x57;
+        lookForFloatVariant = true;
+    }
+    else if (0 == strncmp("sub", tokens->tokens[0], 3) &&
+             4 == strlen(tokens->tokens[0]))
+    {
+        operation           = MATH_SUBX;
+        baseCode            = 0x5F;
+        lookForFloatVariant = true;
+    }
+    else if (0 == strncmp("mul", tokens->tokens[0], 3) &&
+             4 == strlen(tokens->tokens[0]))
+    {
+        operation           = MATH_MULX;
+        baseCode            = 0x67;
+        lookForFloatVariant = true;
+    }
+    else if (0 == strncmp("div", tokens->tokens[0], 3) &&
+             4 == strlen(tokens->tokens[0]))
+    {
+        operation           = MATH_DIVX;
+        baseCode            = 0x6F;
+        lookForFloatVariant = true;
+    }
+    else if (0 == strcmp("mod", tokens->tokens[0]))
+    {
+        operation = MATH_MOD;
+        baseCode  = 0x77;
+    }
+    else if (0 == strcmp("and", tokens->tokens[0]))
+    {
+        operation = MATH_AND;
+        baseCode  = 0x7D;
+    }
+    else if (0 == strcmp("or", tokens->tokens[0]))
+    {
+        operation = MATH_OR;
+        baseCode  = 0x81;
+    }
+    else if (0 == strcmp("xor", tokens->tokens[0]))
+    {
+        operation = MATH_XOR;
+        baseCode  = 0x85;
+    }
+    else if (0 == strcmp("bslt", tokens->tokens[0]))
+    {
+        operation = MATH_BSLT;
+        baseCode  = 0x89;
+    }
+    else if (0 == strcmp("bslc", tokens->tokens[0]))
+    {
+        operation = MATH_BSLC;
+        baseCode  = 0x8B;
+    }
+    else if (0 == strcmp("bsrt", tokens->tokens[0]))
+    {
+        operation = MATH_BSRT;
+        baseCode  = 0x8D;
+    }
+    else if (0 == strcmp("bsrc", tokens->tokens[0]))
+    {
+        operation = MATH_BSRC;
+        baseCode  = 0x8F;
+    }
+    else
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    if (INS_FORM_4 != instructionForm &&
+        false == parseLiteral(tokens->tokens[3], &parsedLiteral, &literalIsFloat))
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (lookForFloatVariant)
+    {
+        if ('f' == tokens->tokens[0][3])
+        {
+            wasFloatVariant = true;
+            if (INS_FORM_4 != instructionForm &&
+                false      == literalIsFloat)
+            {
+                printf("%s:%u: expected float literal argument for \"%s\"\n",
+                       inputFileName, lineNumber, tokens->tokens[0]);
+                return -1;
+            }
+        }
+        else if ('i' == tokens->tokens[0][3])
+        {
+            if (literalIsFloat)
+            {
+                printf("%s:%u: float literal not supported for \"%s\"\n",
+                       inputFileName, lineNumber, tokens->tokens[0]);
+                return -1;
+            }
+        }
+        else
+        {
+            printf("%s:%u: unknown instruction \"%s\"\n",
+                   inputFileName, lineNumber, tokens->tokens[0]);
+            return -1;
+        }
+    }
+    else if (literalIsFloat)
+    {
+        printf("%s:%u: float literal not supported for \"%s\"\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    switch (operation)
+    {
+        case MATH_ADDX:
+        case MATH_SUBX:
+        case MATH_MULX:
+        case MATH_DIVX:
+            if (wasFloatVariant)
+            {
+                return INS_FORM_4 == instructionForm ?
+                       baseCode + 6 : baseCode + 7;
+            }
+
+            // fall through
+        case MATH_MOD:
+            if (INS_FORM_4 == instructionForm)
+            {
+                return baseCode;
+            }
+
+            if (INS_FORM_3W == instructionForm)
+            {
+                return baseCode + 1;
+            }
+
+            if (INS_FORM_3H == instructionForm)
+            {
+                if (parsedLiteral > 0xFFFF)
+                {
+                    return baseCode + 3;
+                }
+
+                return baseCode + 2;
+            }
+
+            if (parsedLiteral > 0xFF)
+            {
+                return baseCode + 5;
+            }
+
+            return baseCode + 4;
+        
+        case MATH_AND:
+        case MATH_OR:
+        case MATH_XOR:
+        {
+            if (INS_FORM_4 == instructionForm)
+            {
+                return baseCode;
+            }
+
+            if (INS_FORM_3W == instructionForm)
+            {
+                return baseCode + 1;
+            }
+
+            if (INS_FORM_3H == instructionForm)
+            {
+                return baseCode + 2;
+            }
+            return baseCode + 3;
+        }
+        case MATH_BSLT:
+        case MATH_BSLC:
+        case MATH_BSRT:
+        case MATH_BSRC:
+        {
+            if (INS_FORM_4 == instructionForm)
+            {
+                return baseCode;
+            }
+
+            if (parsedLiteral > 31)
+            {
+                printf("%s:%u: literal argument too large for \"%s\"\n",
+                       inputFileName, lineNumber, tokens->tokens[0]);
+                return -1;
+            }
+
+            return baseCode + 1;
+        }
+        default:
+        {
+            INTERNAL_ERROR;
+            return -1;
+        }
+    }
+}
+
 static int getInstructionSize(tokens_t *tokens)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
     instructionForm_e        instructionForm    = 0;
 
-    if (NULL == tokens             ||
+    if (NULL == tokens ||
         0    == tokens->tokenCount)
     {
         INTERNAL_ERROR;
@@ -734,9 +1140,7 @@ static int getInstructionSize(tokens_t *tokens)
                 return formInstructionSize[instructionForm];
             }
 
-            // TODO
-            INTERNAL_ERROR;
-            return -1;
+            return descriptorInstance->form;
         }
     }
 
@@ -1831,9 +2235,7 @@ static bool parseInstruction(tokens_t *tokens, uint32_t *address)
         {
             if (NULL == descriptorInstance->formResolverFunction)
             {
-                // TODO
-                INTERNAL_ERROR;
-                return false;
+                instructionForm = descriptorInstance->form;
             }
             else
             {
@@ -1842,22 +2244,22 @@ static bool parseInstruction(tokens_t *tokens, uint32_t *address)
                 {
                     return false;
                 }
+            }
 
-                if (NULL == descriptorInstance->opCodeResolver)
+            if (NULL == descriptorInstance->opCodeResolver)
+            {
+                opCode = descriptorInstance->opCode;
+            }
+            else
+            {
+                rc = descriptorInstance->opCodeResolver(tokens, instructionForm);
+
+                if (-1 == rc)
                 {
-                    opCode = descriptorInstance->opCode;
+                    return false;
                 }
-                else
-                {
-                    rc = descriptorInstance->opCodeResolver(tokens, instructionForm);
 
-                    if (-1 == rc)
-                    {
-                        return false;
-                    }
-
-                    opCode = rc;
-                }
+                opCode = rc;
             }
 
             if (1 != fwrite(&opCode, 1, 1, outputFile))
