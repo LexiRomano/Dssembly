@@ -37,6 +37,16 @@ static instructionForm_e math3FormResolver(tokens_t *tokens);
 static int math3OpCodeResolver(tokens_t         *tokens,
                                instructionForm_e instructionForm);
 
+static int compOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm);
+
+static instructionForm_e evalFormResolver(tokens_t *tokens);
+
+static int evalOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm);
+
+static flagCondition_e evalFlagConditionResolver(char *instruction);
+
 static instructionDescriptor_t instructionDescriptors[] =
 {
     {"move",     false, 0, moveFormResolver,  0, moveOpCodeResolver,  NULL, true},
@@ -66,6 +76,8 @@ static instructionDescriptor_t instructionDescriptors[] =
     {"ftoi",     false, INS_FORM_3, NULL,     0xB6, NULL,             NULL, false},
     {"uitof",    false, INS_FORM_3, NULL,     0xB7, NULL,             NULL, false},
     {"sitof",    false, INS_FORM_3, NULL,     0xB8, NULL,             NULL, false},
+    {"comp.",    true,  0, moveFormResolver,  0, compOpCodeResolver,  NULL, false},
+    {"eval...",  true,  0, evalFormResolver,  0, evalOpCodeResolver,  evalFlagConditionResolver, false},
 };
 
 static char regselDescriptors[][3] = 
@@ -507,9 +519,8 @@ static instructionForm_e moveFormResolver(tokens_t *tokens)
     bool     isFloat       = false;
     uint32_t parsedLiteral = 0;
 
-    if (NULL == tokens             ||
-        1    >  tokens->tokenCount ||
-        0    != strcmp("move", tokens->tokens[0]))
+    if (NULL == tokens ||
+        1    >  tokens->tokenCount)
     {
         INTERNAL_ERROR;
         return INS_FORM_ERR;
@@ -517,13 +528,8 @@ static instructionForm_e moveFormResolver(tokens_t *tokens)
 
     if (3 != tokens->tokenCount)
     {
-        printf("%s:%u: \"move\" requires exactly 2 arguments\n", inputFileName, lineNumber);
-        return INS_FORM_ERR;
-    }
-
-    if (false == isValidRegsel(tokens->tokens[1]))
-    {
-        printf("%s:%u: \"move\" requires the first argument to be a regsel\n", inputFileName, lineNumber);
+        printf("%s:%u: \"%s\" requires exactly 2 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
         return INS_FORM_ERR;
     }
 
@@ -980,8 +986,9 @@ static int math3OpCodeResolver(tokens_t         *tokens,
     if (INS_FORM_4 != instructionForm &&
         false == parseLiteral(tokens->tokens[3], &parsedLiteral, &literalIsFloat))
     {
-        INTERNAL_ERROR;
-        return -1;
+        // May have been a label, just pretend we got a number and evaluate
+        // if that's allowed later
+        parsedLiteral = 0x80000000;
     }
 
     if (lookForFloatVariant)
@@ -1108,6 +1115,313 @@ static int math3OpCodeResolver(tokens_t         *tokens,
     }
 }
 
+static int compOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm)
+{
+    uint32_t literalValue   = 0;
+    bool     literalIsFloat = 0;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (3 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 2 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    if (INS_FORM_3 != instructionForm &&
+        false == parseLiteral(tokens->tokens[2], &literalValue, &literalIsFloat))
+    {
+        // May have been a label, just pretend we got a number and evaluate
+        // if that's allowed later
+        literalValue = 0x80000000;
+    }
+
+    if (0 == strcmp("compi", tokens->tokens[0]))
+    {
+        if (literalIsFloat)
+        {
+            printf("%s:%u: float argument not supported for \"%s\"\n",
+                   inputFileName, lineNumber, tokens->tokens[0]);
+            return -1;
+        }
+
+        if (INS_FORM_3 == instructionForm)
+        {
+            return 0x92;
+        }
+
+        if (INS_FORM_2W == instructionForm)
+        {
+            return 0x93;
+        }
+
+        if (INS_FORM_2H == instructionForm)
+        {
+            if (literalValue > 0xFFFF)
+            {
+                return 0x95;
+            }
+
+            return 0x94;
+        }
+
+        if (literalValue > 0xFF)
+        {
+            return 0x97;
+        }
+
+        return 0x96;
+    }
+
+    if (0 == strcmp("compf", tokens->tokens[0]))
+    {
+        if (INS_FORM_3 != instructionForm &&
+            false      == literalIsFloat)
+        {
+            printf("%s:%u: expected float literal argument for \"%s\"\n",
+                   inputFileName, lineNumber, tokens->tokens[0]);
+            return -1;
+        }
+        return INS_FORM_3 == instructionForm ? 0x98 : 0x99;
+    }
+
+    printf("%s:%u: unknown instruction \"%s\"\n",
+           inputFileName, lineNumber, tokens->tokens[0]);
+    return -1;
+}
+
+static instructionForm_e evalFormResolver(tokens_t *tokens)
+{
+    bool     isFloat       = false;
+    uint32_t parsedLiteral = 0;
+
+    if (NULL == tokens ||
+        1    >  tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return INS_FORM_ERR;
+    }
+
+    if (4 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 3 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[3]))
+    {
+        return INS_FORM_8;
+    }
+
+    if (parseLiteral(tokens->tokens[3], &parsedLiteral, &isFloat))
+    {
+        if (isFloat)
+        {
+            return INS_FORM_7W;
+        }
+
+        if (parsedLiteral <= 0xFF ||
+            parsedLiteral >= 0xFFFFFF80)
+        {
+            return INS_FORM_7C;
+        }
+
+        if (parsedLiteral <= 0xFFFF ||
+            parsedLiteral >= 0xFFFF8000)
+        {
+            return INS_FORM_7H;
+        }
+    }
+
+    return INS_FORM_7W;
+}
+
+static int evalOpCodeResolver(tokens_t         *tokens,
+                              instructionForm_e instructionForm)
+{
+    uint32_t literalValue   = 0;
+    bool     literalIsFloat = 0;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (4 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 3 arguments\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    if (INS_FORM_8 != instructionForm &&
+        false == parseLiteral(tokens->tokens[3], &literalValue, &literalIsFloat))
+    {
+        // May have been a label, just pretend we got a number and evaluate
+        // if that's allowed later
+        literalValue = 0x80000000;
+    }
+
+    if (0 == strncmp("evali", tokens->tokens[0], 5))
+    {
+        if (literalIsFloat)
+        {
+            printf("%s:%u: float argument not supported for \"%s\"\n",
+                   inputFileName, lineNumber, tokens->tokens[0]);
+            return -1;
+        }
+
+        if (INS_FORM_8 == instructionForm)
+        {
+            return 0x9A;
+        }
+
+        if (INS_FORM_7W == instructionForm)
+        {
+            return 0x9B;
+        }
+
+        if (INS_FORM_7H == instructionForm)
+        {
+            if (literalValue > 0xFFFF)
+            {
+                return 0x9D;
+            }
+
+            return 0x9C;
+        }
+
+        if (literalValue > 0xFF)
+        {
+            return 0x9F;
+        }
+
+        return 0x9E;
+    }
+
+    if (0 == strncmp("evalf", tokens->tokens[0], 5))
+    {
+        if (INS_FORM_8 != instructionForm &&
+            false      == literalIsFloat)
+        {
+            printf("%s:%u: expected float literal argument for \"%s\"\n",
+                   inputFileName, lineNumber, tokens->tokens[0]);
+            return -1;
+        }
+        return INS_FORM_8 == instructionForm ? 0xA0 : 0xA1;
+    }
+
+    printf("%s:%u: unknown instruction \"%s\"\n",
+           inputFileName, lineNumber, tokens->tokens[0]);
+    return -1;
+}
+
+static flagCondition_e extractFlagCondition(char *snippet)
+{
+    if (NULL == snippet ||
+        2    != strlen(snippet))
+    {
+        return FLAG_ERR;
+    }
+
+    if (0 == strcmp("al", snippet))
+    {
+        return FLAG_AL;
+    }
+    if (0 == strcmp("eq", snippet) ||
+        0 == strcmp("zs", snippet))
+    {
+        return FLAG_EQ;
+    }
+    if (0 == strcmp("ne", snippet) ||
+        0 == strcmp("zc", snippet))
+    {
+        return FLAG_NE;
+    }
+    if (0 == strcmp("hi", snippet))
+    {
+        return FLAG_HI;
+    }
+    if (0 == strcmp("hs", snippet) ||
+        0 == strcmp("cs", snippet))
+    {
+        return FLAG_HS;
+    }
+    if (0 == strcmp("ls", snippet))
+    {
+        return FLAG_LS;
+    }
+    if (0 == strcmp("lo", snippet) ||
+        0 == strcmp("cc", snippet))
+    {
+        return FLAG_LO;
+    }
+    if (0 == strcmp("gt", snippet))
+    {
+        return FLAG_GT;
+    }
+    if (0 == strcmp("ge", snippet))
+    {
+        return FLAG_GE;
+    }
+    if (0 == strcmp("le", snippet))
+    {
+        return FLAG_LE;
+    }
+    if (0 == strcmp("lt", snippet))
+    {
+        return FLAG_LT;
+    }
+    if (0 == strcmp("mi", snippet))
+    {
+        return FLAG_MI;
+    }
+    if (0 == strcmp("pz", snippet))
+    {
+        return FLAG_PZ;
+    }
+    if (0 == strcmp("ov", snippet))
+    {
+        return FLAG_OV;
+    }
+    if (0 == strcmp("nv", snippet))
+    {
+        return FLAG_NV;
+    }
+    return FLAG_ERR;
+}
+
+static flagCondition_e evalFlagConditionResolver(char *instruction)
+{
+    flagCondition_e out = 0;
+
+    if (NULL == instruction)
+    {
+        INTERNAL_ERROR;
+        return FLAG_ERR;
+    }
+
+    if (7 != strlen(instruction) ||
+        FLAG_ERR == (out = extractFlagCondition(&instruction[5])))
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n",
+               inputFileName, lineNumber, instruction);
+        return -1;
+    }
+
+    return out;
+}
+
 static int getInstructionSize(tokens_t *tokens)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
@@ -1140,7 +1454,7 @@ static int getInstructionSize(tokens_t *tokens)
                 return formInstructionSize[instructionForm];
             }
 
-            return descriptorInstance->form;
+            return formInstructionSize[descriptorInstance->form];
         }
     }
 
@@ -1959,10 +2273,12 @@ static bool parseDotDirectiveSecondPass(tokens_t *tokens, uint32_t *address)
     return false;
 }
 
-static bool parseRegselAndFlagConditions(tokens_t                *tokens,
-                                         instructionForm_e        instructionForm)
+static bool parseRegselAndFlagConditions(tokens_t               *tokens,
+                                         instructionForm_e       instructionForm,
+                                         flagConditionResolver_t flagConditionResolver)
 {
     uint8_t byteOut = 0;
+    flagCondition_e condition = 0;
 
     if (NULL == tokens)
     {
@@ -2011,7 +2327,38 @@ static bool parseRegselAndFlagConditions(tokens_t                *tokens,
         byteOut |= getRegsel(tokens->tokens[2]) << 4;
     }
 
-    // TODO flag condition for byte 1
+    if (instructionForm >= INS_FORM_5 &&
+        instructionForm <= INS_FORM_5C)
+    {
+        if (NULL == flagConditionResolver)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        if (FLAG_ERR == (condition = flagConditionResolver(tokens->tokens[0])))
+        {
+            return false;
+        }
+
+        byteOut = condition;
+    }
+    else if (instructionForm >= INS_FORM_6 &&
+             instructionForm <= INS_FORM_6C)
+    {
+        if (NULL == flagConditionResolver)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        if (FLAG_ERR == (condition = flagConditionResolver(tokens->tokens[0])))
+        {
+            return false;
+        }
+
+        byteOut |= condition << 4;
+    }
 
     if (1 != fwrite(&byteOut, 1, 1, outputFile))
     {
@@ -2043,7 +2390,39 @@ static bool parseRegselAndFlagConditions(tokens_t                *tokens,
         byteOut = getRegsel(tokens->tokens[3]);
     }
 
-    // TODO flag condition for byte 2
+    if (instructionForm >= INS_FORM_7 &&
+        instructionForm <= INS_FORM_7C)
+    {
+        if (NULL == flagConditionResolver)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        if (FLAG_ERR == (condition = flagConditionResolver(tokens->tokens[0])))
+        {
+            return false;
+        }
+
+        byteOut = condition;
+    }
+    else if (instructionForm >= INS_FORM_8 &&
+             instructionForm <= INS_FORM_8C)
+    {
+        if (NULL == flagConditionResolver)
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        if (FLAG_ERR == (condition = flagConditionResolver(tokens->tokens[0])))
+        {
+            return false;
+        }
+
+        byteOut |= condition << 4;
+    }
+
     if (1 != fwrite(&byteOut, 1, 1, outputFile))
     {
         printf("Error writing to \"%s\"\n", outputFileName);
@@ -2268,8 +2647,13 @@ static bool parseInstruction(tokens_t *tokens, uint32_t *address)
                 return false;
             }
 
-            if (false == parseRegselAndFlagConditions(tokens, instructionForm) ||
-                false == parseInstructionArgument(tokens, *address, descriptorInstance, instructionForm))
+            if (false == parseRegselAndFlagConditions(tokens,
+                                                      instructionForm,
+                                                      descriptorInstance->flagConditionResolver) ||
+                false == parseInstructionArgument(tokens,
+                                                  *address,
+                                                  descriptorInstance,
+                                                  instructionForm))
             {
                 return false;
             }
