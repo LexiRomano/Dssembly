@@ -47,37 +47,79 @@ static int evalOpCodeResolver(tokens_t         *tokens,
 
 static flagCondition_e evalFlagConditionResolver(char *instruction);
 
+static instructionForm_e branchFormResolver(tokens_t *tokens);
+
+static int branchOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm);
+
+static flagCondition_e branchFlagConditionResolver(char *instruction);
+
+static instructionForm_e inttgrFormResolver(tokens_t *tokens);
+
+static int inttgrOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm);
+
+static instructionForm_e intsraFormResolver(tokens_t *tokens);
+
+static int intsraOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm);
+
+static instructionForm_e getabsFormResolver(tokens_t *tokens);
+
+static int getabsOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm);
+
+static int getrelOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm);
+
 static instructionDescriptor_t instructionDescriptors[] =
 {
-    {"move",     false, 0, moveFormResolver,  0, moveOpCodeResolver,  NULL, true},
-    {"load.pc",  true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, true},
-    {"load..pc", true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, true},
-    {"load...",  true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, false},
-    {"load....", true,  0, lssFormResolver,   0, loadOpCodeResolver,  NULL, false},
-    {"stor.pc",  true,  0, lssFormResolver,   0, storOpCodeResolver,  NULL, true},
-    {"stor...",  true,  0, lssFormResolver,   0, storOpCodeResolver,  NULL, false},
-    {"swap.pc",  true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, true},
-    {"swap..pc", true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, true},
-    {"swap...",  true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, false},
-    {"swap....", true,  0, lssFormResolver,   0, swapOpCodeResolver,  NULL, false},
-    {"add.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"sub.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"mul.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"div.",     true,  0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"mod",      false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"and",      false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"or",       false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"xor",      false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"bslt",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"bslc",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"bsrt",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"bsrc",     false, 0, math3FormResolver, 0, math3OpCodeResolver, NULL, false},
-    {"not",      false, INS_FORM_3, NULL,     0x91, NULL,             NULL, false},
-    {"ftoi",     false, INS_FORM_3, NULL,     0xB6, NULL,             NULL, false},
-    {"uitof",    false, INS_FORM_3, NULL,     0xB7, NULL,             NULL, false},
-    {"sitof",    false, INS_FORM_3, NULL,     0xB8, NULL,             NULL, false},
-    {"comp.",    true,  0, moveFormResolver,  0, compOpCodeResolver,  NULL, false},
-    {"eval...",  true,  0, evalFormResolver,  0, evalOpCodeResolver,  evalFlagConditionResolver, false},
+    {"move",     false, 0, moveFormResolver,   0, moveOpCodeResolver,   NULL, true},
+    {"load.pc",  true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true},
+    {"load..pc", true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true},
+    {"load...",  true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, false},
+    {"load....", true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, false},
+    {"stor.pc",  true,  0, lssFormResolver,    0, storOpCodeResolver,   NULL, true},
+    {"stor...",  true,  0, lssFormResolver,    0, storOpCodeResolver,   NULL, false},
+    {"swap.pc",  true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true},
+    {"swap..pc", true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true},
+    {"swap...",  true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, false},
+    {"swap....", true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, false},
+    {"add.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"sub.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"mul.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"div.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"mod",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"and",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"or",       false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"xor",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"bslt",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"bslc",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"bsrt",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"bsrc",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
+    {"not",      false, INS_FORM_3, NULL,      0x91, NULL,              NULL, false},
+    {"ftoi",     false, INS_FORM_3, NULL,      0xB6, NULL,              NULL, false},
+    {"uitof",    false, INS_FORM_3, NULL,      0xB7, NULL,              NULL, false},
+    {"sitof",    false, INS_FORM_3, NULL,      0xB8, NULL,              NULL, false},
+    {"comp.",    true,  0, moveFormResolver,   0, compOpCodeResolver,   NULL, false},
+    {"eval...",  true,  0, evalFormResolver,   0, evalOpCodeResolver,   evalFlagConditionResolver,   false},
+    {"br..pc",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true},
+    {"br....",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, false},
+    {"bp..pc",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true},
+    {"bp....",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, false},
+    {"push",     false, INS_FORM_2, NULL,      0xB9, NULL,              NULL, false},
+    {"pop",      false, INS_FORM_2, NULL,      0xBA, NULL,              NULL, false},
+    {"peek",     false, INS_FORM_2, NULL,      0xBB, NULL,              NULL, false},
+    {"return",   false, INS_FORM_1, NULL,      0xBC, NULL,              NULL, false},
+    {"intsus",   false, INS_FORM_1, NULL,      0xBD, NULL,              NULL, false},
+    {"intres",   false, INS_FORM_1, NULL,      0xBE, NULL,              NULL, false},
+    {"intfin",   false, INS_FORM_1, NULL,      0xBF, NULL,              NULL, false},
+    {"inttgr",   false, 0, inttgrFormResolver, 0, inttgrOpCodeResolver, NULL, false},
+    {"intgpr",   false, INS_FORM_2, NULL,      0xC2, NULL,              NULL, false},
+    {"intgra",   false, INS_FORM_2, NULL,      0xC3, NULL,              NULL, false},
+    {"intsra",   false, 0, intsraFormResolver, 0, intsraOpCodeResolver, NULL, false},
+    {"getabs",   false, 0, getabsFormResolver, 0, getabsOpCodeResolver, NULL, true},
+    {"getrel..", true,  0, getabsFormResolver, 0, getrelOpCodeResolver, NULL, true},
 };
 
 static char regselDescriptors[][3] = 
@@ -1422,6 +1464,278 @@ static flagCondition_e evalFlagConditionResolver(char *instruction)
     return out;
 }
 
+static instructionForm_e branchFormResolver(tokens_t *tokens)
+{
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return INS_FORM_ERR;
+    }
+
+    if (2 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 1 argument\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[1]))
+    {
+        return INS_FORM_6;
+    }
+
+    return INS_FORM_5W;
+}
+
+static int branchOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm)
+{
+    char            *snippet        = NULL;
+    addressingMode_e addressingMode = 0;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (6 != strlen(tokens->tokens[0]))
+    {
+        // Should be forbiden by the descriptors
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    snippet = &tokens->tokens[0][4];
+
+    if (0 == strcmp(snippet, "ab"))
+    {
+        addressingMode = ADDRESSING_MODE_AB;
+    }
+    else if (0 == strcmp(snippet, "pc"))
+    {
+        addressingMode = ADDRESSING_MODE_PC;
+    }
+    else if (0 == strcmp(snippet, "oa"))
+    {
+        addressingMode = ADDRESSING_MODE_OA;
+    }
+    else if (0 == strcmp(snippet, "ob"))
+    {
+        addressingMode = ADDRESSING_MODE_OB;
+    }
+    else if (0 == strcmp(snippet, "oc"))
+    {
+        addressingMode = ADDRESSING_MODE_OC;
+    }
+    else
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    if ('r' == tokens->tokens[0][1])
+    {
+        if (INS_FORM_6 == instructionForm)
+        {
+            return 0xA2 + addressingMode;
+        }
+
+        return 0xAC + addressingMode;
+    }
+    else if ('p' == tokens->tokens[0][1])
+    {
+        if (INS_FORM_6 == instructionForm)
+        {
+            return 0xA7 + addressingMode;
+        }
+
+        return 0xB1 + addressingMode;
+    }
+    else
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+}
+
+static flagCondition_e branchFlagConditionResolver(char *instruction)
+{
+    char            buf[3] = {0};
+    flagCondition_e out    = 0;
+
+    if (NULL == instruction)
+    {
+        INTERNAL_ERROR;
+        return FLAG_ERR;
+    }
+
+    if (6 != strlen(instruction))
+    {
+        // Should be forbiden by the descriptors
+        INTERNAL_ERROR;
+        return FLAG_ERR;
+    }
+
+    buf[0] = instruction[2];
+    buf[1] = instruction[3];
+    buf[2] = '\0';
+
+    if (FLAG_ERR == (out = extractFlagCondition(buf)))
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n",
+               inputFileName, lineNumber, instruction);
+        return FLAG_ERR;
+    }
+
+    return out;
+}
+
+static instructionForm_e inttgrFormResolver(tokens_t *tokens)
+{
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return INS_FORM_ERR;
+    }
+
+    if (2 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 1 argument\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[1]))
+    {
+        return INS_FORM_2;
+    }
+
+    return INS_FORM_1H;
+}
+
+static int inttgrOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm)
+{
+    (void)tokens;
+
+    return INS_FORM_2 == instructionForm ? 0xC0 : 0xC1;
+}
+
+static instructionForm_e intsraFormResolver(tokens_t *tokens)
+{
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return INS_FORM_ERR;
+    }
+
+    if (2 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 1 argument\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[1]))
+    {
+        return INS_FORM_2;
+    }
+
+    return INS_FORM_1W;
+}
+
+static int intsraOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm)
+{
+    (void)tokens;
+
+    return INS_FORM_2 == instructionForm ? 0xC4 : 0xC5;
+}
+
+static instructionForm_e getabsFormResolver(tokens_t *tokens)
+{
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return INS_FORM_ERR;
+    }
+
+    if (3 != tokens->tokenCount)
+    {
+        printf("%s:%u: \"%s\" requires exactly 2 argument\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return INS_FORM_ERR;
+    }
+
+    if (isValidRegsel(tokens->tokens[2]))
+    {
+        return INS_FORM_3;
+    }
+
+    return INS_FORM_2W;
+}
+
+static int getabsOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm)
+{
+    (void)tokens;
+
+    return INS_FORM_3 == instructionForm ? 0xC6 : 0xC7;
+}
+
+static int getrelOpCodeResolver(tokens_t         *tokens,
+                                instructionForm_e instructionForm)
+{
+    char            *snippet        = NULL;
+    addressingMode_e addressingMode = 0;
+
+    if (NULL == tokens ||
+        0    == tokens->tokenCount)
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    if (8 != strlen(tokens->tokens[0]))
+    {
+        INTERNAL_ERROR;
+        return -1;
+    }
+
+    snippet = &tokens->tokens[0][6];
+
+    if (0 == strcmp(snippet, "oa"))
+    {
+        addressingMode = ADDRESSING_MODE_OA;
+    }
+    else if (0 == strcmp(snippet, "ob"))
+    {
+        addressingMode = ADDRESSING_MODE_OB;
+    }
+    else if (0 == strcmp(snippet, "oc"))
+    {
+        addressingMode = ADDRESSING_MODE_OC;
+    }
+    else
+    {
+        printf("%s:%u: unknown instruction \"%s\"\n",
+               inputFileName, lineNumber, tokens->tokens[0]);
+        return -1;
+    }
+
+    addressingMode -= ADDRESSING_MODE_OA;
+
+    return INS_FORM_3 == instructionForm ? 0xC8 + addressingMode :
+                                           0xCB + addressingMode; 
+}
+
 static int getInstructionSize(tokens_t *tokens)
 {
     instructionDescriptor_t *descriptorInstance = NULL;
@@ -2289,7 +2603,7 @@ static bool parseRegselAndFlagConditions(tokens_t               *tokens,
     if (formArgCount[instructionForm] != tokens->tokenCount - 1)
     {
         printf("%s:%u: expected %hhu arguments for \"%s\"\n",
-               inputFileName, lineNumber, tokens->tokenCount, tokens->tokens[0]);
+               inputFileName, lineNumber, formArgCount[instructionForm], tokens->tokens[0]);
         return false;
     }
 
@@ -2457,7 +2771,7 @@ static bool parseInstructionArgument(tokens_t                *tokens,
     if (formArgCount[instructionForm] != tokens->tokenCount - 1)
     {
         printf("%s:%u: expected %hhu arguments for \"%s\"\n",
-               inputFileName, lineNumber, tokens->tokenCount, tokens->tokens[0]);
+               inputFileName, lineNumber, formArgCount[instructionForm], tokens->tokens[0]);
         return false;
     }
 
