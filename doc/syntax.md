@@ -68,7 +68,7 @@ Include will define aliases defined in another file. Includes do not occur recur
     move     G1 TABLE_ADDR
 :loop
     loadcab  G2 G1
-    comp     G2 TABLE_END
+    compi    G2 TABLE_END
     breqpc   break
     addi     G0 G0 1
     addi     G1 G1 1
@@ -126,7 +126,7 @@ Finally, sets can be used to store null-terminated strings as such:
     move    G1 0
 :printProgramName
     loadcoa G0 G1
-    comp    G0 0
+    compi   G0 0
     breqpc  done
     bpal    print
     addi    G1 G1 1
@@ -321,7 +321,7 @@ Examples:
 ```
 bralab 0x8000   // Unconditional branch to the absolute address 0x8000
 
-brcpc  overflow // Branch to a label called overflow if the carry flag is set
+brcspc overflow // Branch to a label called overflow if the carry flag is set
 
 breqoa 0x12     // Branch to oa + 0x12 if the last operation resulted in an equivalent comparison
 ```
@@ -428,40 +428,40 @@ This code will scan for certain devices and store their device data addresses fo
 // Scan for some devices
     move     OA 0x5FF8
 :scanTop
-    add      OA OA 8
-    comp     OA 0x6100
+    addi     OA OA 8
+    compi    OA 0x6100
     breqpc   doneScan
     loadcoa  G0 1
-    comp     G0 peripheralDeviceCode
+    compi    G0 peripheralDeviceCode
     breqpc   isPeripheral
-    comp     G0 peripheralDeviceCode
+    compi    G0 peripheralDeviceCode
     breqpc   isStorage
-    comp     G0 deviceRegistryEOT
+    compi    G0 deviceRegistryEOT
     breqpc   doneScan
-    bral     scanTop
+    bralpc   scanTop
 
 
 :isPeripheral
     loadwoa  OB 4
     loadcob  G0 0
-    comp     G0 serialTypeID
+    compi    G0 serialTypeID
     brnepc   scanTop
 
     // is serial port
     loadcob  G0 1
-    comp     G0 derialProtocolID
+    compi    G0 derialProtocolID
     brnepc   scanTop
 
     // is derial
     storwab  OB derialAddress
-    bral     scanTop
+    bralpc   scanTop
 
 :isStorage
     loadwoa  OB 4
     loadcob  G0 0
-    comp     G0 dardriveManagerSPI
+    compi    G0 dardriveManagerSPI
     breqpc   isDardriveManager
-    comp     G0 dardriveDriveSPI
+    compi    G0 dardriveDriveSPI
     brnepc   scanTop
 
     // is dardrive drive
