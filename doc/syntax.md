@@ -382,6 +382,10 @@ Gets the absolue address of a provided address relative to PC. Basically dest = 
 
 Gets an address which can be resolved relative to an offset register. The address is calculated relative to PC. Basically dest = address + PC - OX. The three offset registers may be selected as `getreloa`, `getrelob`, and `getreloc`.
 
+### `debug <reg>`
+
+For emulator debug mode only. Prints the contents of the specified register to the screen.
+
 ### Branch Conditions
 
 | Code | Function            | Flags          |
