@@ -120,6 +120,7 @@ static instructionDescriptor_t instructionDescriptors[] =
     {"intsra",   false, 0, intsraFormResolver, 0, intsraOpCodeResolver, NULL, false},
     {"getabs",   false, 0, getabsFormResolver, 0, getabsOpCodeResolver, NULL, true},
     {"getrel..", true,  0, getabsFormResolver, 0, getrelOpCodeResolver, NULL, true},
+    {"debug",    false, INS_FORM_2, NULL,      0x00, NULL,              NULL, false},
 };
 
 static char regselDescriptors[][3] = 
