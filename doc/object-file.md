@@ -9,18 +9,19 @@ Dssembly object files are comprised of the following parts:
 - Header
     - Section names
     - Pointers to section segments
-- Sections
+- Section Contents
     - Code segment
     - Exported labels segment
     - Required labels segment
+    - Origin relative segment
 
 The header is always the first to show up in the object file. Following that are all of the sections.
 
 ## Header
 
-The header of an object file contains the names of all sections, and pointers to the different segments of each section. Each header entry starts with the null-terminated name of the section it represents. Following the null terminator, three 4-byte file offsets are provided corresponding to the code, exported labels, and required labels segments. After the final header entry, a single null byte signifies the end of the header, after which the sections shall follow.
+The header of an object file contains the names of all sections, and pointers to the different segments of each section. Each header entry starts with the null-terminated name of the section it represents. Following the null terminator, four 4-byte file offsets are provided corresponding to the code, exported labels, required labels, and origin relative segments. After the final header entry, a single null byte signifies the end of the header, after which the sections shall follow.
 
-## Sections
+## Section Contents
 
 ### Code segment
 

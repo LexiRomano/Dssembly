@@ -36,7 +36,7 @@ Labels are a portable way to reffer to certain parts of code. They can only be u
     bralpc myLabel
 ```
 
-For portability, all instructions using a label as an address are enforced to use the PC relative addressing mode.
+Labels used with the pc relative addressing mode will be resolved relative to the instruction using it. All other addressing modes (ab, oa, ob, oc) will resolve the label address relative to the origin (first instruction/directive) of the program. See exception for `getrelxx`
 
 ### Aliases
 
@@ -380,7 +380,7 @@ Gets the absolue address of a provided address relative to PC. Basically dest = 
 
 ### `getrelx <dest> <address>`
 
-Gets an address which can be resolved relative to an offset register. The address is calculated relative to PC. Basically dest = address + PC - OX. The three offset registers may be selected as `getreloa`, `getrelob`, and `getreloc`.
+Gets an address which can be resolved relative to an offset register. The address is calculated relative to PC. Basically dest = address + PC - OX. The three offset registers may be selected as `getreloa`, `getrelob`, and `getreloc`. Despite the addressing mode appearing to be relative to an offset register, it is also considered a pc relative instruction for the purposes of resolving label addresses.
 
 ### `debug <reg>`
 

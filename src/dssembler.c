@@ -74,53 +74,53 @@ static int getrelOpCodeResolver(tokens_t         *tokens,
 
 static instructionDescriptor_t instructionDescriptors[] =
 {
-    {"move",     false, 0, moveFormResolver,   0, moveOpCodeResolver,   NULL, true},
-    {"load.pc",  true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true},
-    {"load..pc", true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true},
-    {"load...",  true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, false},
-    {"load....", true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, false},
-    {"stor.pc",  true,  0, lssFormResolver,    0, storOpCodeResolver,   NULL, true},
-    {"stor...",  true,  0, lssFormResolver,    0, storOpCodeResolver,   NULL, false},
-    {"swap.pc",  true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true},
-    {"swap..pc", true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true},
-    {"swap...",  true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, false},
-    {"swap....", true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, false},
-    {"add.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"sub.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"mul.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"div.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"mod",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"and",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"or",       false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"xor",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"bslt",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"bslc",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"bsrt",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"bsrc",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false},
-    {"not",      false, INS_FORM_3, NULL,      0x91, NULL,              NULL, false},
-    {"ftoi",     false, INS_FORM_3, NULL,      0xB6, NULL,              NULL, false},
-    {"uitof",    false, INS_FORM_3, NULL,      0xB7, NULL,              NULL, false},
-    {"sitof",    false, INS_FORM_3, NULL,      0xB8, NULL,              NULL, false},
-    {"comp.",    true,  0, moveFormResolver,   0, compOpCodeResolver,   NULL, false},
-    {"eval...",  true,  0, evalFormResolver,   0, evalOpCodeResolver,   evalFlagConditionResolver,   false},
-    {"br..pc",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true},
-    {"br....",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, false},
-    {"bp..pc",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true},
-    {"bp....",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, false},
-    {"push",     false, INS_FORM_2, NULL,      0xB9, NULL,              NULL, false},
-    {"pop",      false, INS_FORM_2, NULL,      0xBA, NULL,              NULL, false},
-    {"peek",     false, INS_FORM_2, NULL,      0xBB, NULL,              NULL, false},
-    {"return",   false, INS_FORM_1, NULL,      0xBC, NULL,              NULL, false},
-    {"intsus",   false, INS_FORM_1, NULL,      0xBD, NULL,              NULL, false},
-    {"intres",   false, INS_FORM_1, NULL,      0xBE, NULL,              NULL, false},
-    {"intfin",   false, INS_FORM_1, NULL,      0xBF, NULL,              NULL, false},
-    {"inttgr",   false, 0, inttgrFormResolver, 0, inttgrOpCodeResolver, NULL, false},
-    {"intgpr",   false, INS_FORM_2, NULL,      0xC2, NULL,              NULL, false},
-    {"intgra",   false, INS_FORM_2, NULL,      0xC3, NULL,              NULL, false},
-    {"intsra",   false, 0, intsraFormResolver, 0, intsraOpCodeResolver, NULL, false},
-    {"getabs",   false, 0, getabsFormResolver, 0, getabsOpCodeResolver, NULL, true},
-    {"getrel..", true,  0, getabsFormResolver, 0, getrelOpCodeResolver, NULL, true},
-    {"debug",    false, INS_FORM_2, NULL,      0x00, NULL,              NULL, false},
+    {"move",     false, 0, moveFormResolver,   0, moveOpCodeResolver,   NULL, true, false},
+    {"load.pc",  true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true, true},
+    {"load..pc", true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true, true},
+    {"load...",  true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true, false},
+    {"load....", true,  0, lssFormResolver,    0, loadOpCodeResolver,   NULL, true, false},
+    {"stor.pc",  true,  0, lssFormResolver,    0, storOpCodeResolver,   NULL, true, true},
+    {"stor...",  true,  0, lssFormResolver,    0, storOpCodeResolver,   NULL, true, false},
+    {"swap.pc",  true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true, true},
+    {"swap..pc", true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true, true},
+    {"swap...",  true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true, false},
+    {"swap....", true,  0, lssFormResolver,    0, swapOpCodeResolver,   NULL, true, false},
+    {"add.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"sub.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"mul.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"div.",     true,  0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"mod",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"and",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"or",       false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"xor",      false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"bslt",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"bslc",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"bsrt",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"bsrc",     false, 0, math3FormResolver,  0, math3OpCodeResolver,  NULL, false, false},
+    {"not",      false, INS_FORM_3, NULL,      0x91, NULL,              NULL, false, false},
+    {"ftoi",     false, INS_FORM_3, NULL,      0xB6, NULL,              NULL, false, false},
+    {"uitof",    false, INS_FORM_3, NULL,      0xB7, NULL,              NULL, false, false},
+    {"sitof",    false, INS_FORM_3, NULL,      0xB8, NULL,              NULL, false, false},
+    {"comp.",    true,  0, moveFormResolver,   0, compOpCodeResolver,   NULL, false, false},
+    {"eval...",  true,  0, evalFormResolver,   0, evalOpCodeResolver,   evalFlagConditionResolver,   false, false},
+    {"br..pc",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true, true},
+    {"br....",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true, false},
+    {"bp..pc",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true, true},
+    {"bp....",   true,  0, branchFormResolver, 0, branchOpCodeResolver, branchFlagConditionResolver, true, false},
+    {"push",     false, INS_FORM_2, NULL,      0xB9, NULL,              NULL, false, false},
+    {"pop",      false, INS_FORM_2, NULL,      0xBA, NULL,              NULL, false, false},
+    {"peek",     false, INS_FORM_2, NULL,      0xBB, NULL,              NULL, false, false},
+    {"return",   false, INS_FORM_1, NULL,      0xBC, NULL,              NULL, false, false},
+    {"intsus",   false, INS_FORM_1, NULL,      0xBD, NULL,              NULL, false, false},
+    {"intres",   false, INS_FORM_1, NULL,      0xBE, NULL,              NULL, false, false},
+    {"intfin",   false, INS_FORM_1, NULL,      0xBF, NULL,              NULL, false, false},
+    {"inttgr",   false, 0, inttgrFormResolver, 0, inttgrOpCodeResolver, NULL, false, false},
+    {"intgpr",   false, INS_FORM_2, NULL,      0xC2, NULL,              NULL, false, false},
+    {"intgra",   false, INS_FORM_2, NULL,      0xC3, NULL,              NULL, false, false},
+    {"intsra",   false, 0, intsraFormResolver, 0, intsraOpCodeResolver, NULL, false, false},
+    {"getabs",   false, 0, getabsFormResolver, 0, getabsOpCodeResolver, NULL, true, true},
+    {"getrel..", true,  0, getabsFormResolver, 0, getrelOpCodeResolver, NULL, true, true},
+    {"debug",    false, INS_FORM_2, NULL,      0x00, NULL,              NULL, false, false},
 };
 
 static char regselDescriptors[][3] = 
@@ -2752,14 +2752,15 @@ static bool parseInstructionArgument(tokens_t                *tokens,
                                      instructionDescriptor_t *descriptor,
                                      instructionForm_e        instructionForm)
 {
-    char                 *literalArgument    = NULL;
-    label_t              *label              = NULL;
-    requiredLabel_t      *requiredLabel      = NULL;
-    resolutionInstance_t *resolutionInstance = NULL;
-    uint32_t              literalValue32     = 0;
-    uint16_t              literalValue16     = 0;
-    uint8_t               literalValue8      = 0;
-    bool                  wasFloat           = false;
+    char                 *literalArgument        = NULL;
+    label_t              *label                  = NULL;
+    requiredLabel_t      *requiredLabel          = NULL;
+    resolutionInstance_t *resolutionInstance     = NULL;
+    originRelative_t     *originRelativeInstance = NULL;
+    uint32_t              literalValue32         = 0;
+    uint16_t              literalValue16         = 0;
+    uint8_t               literalValue8          = 0;
+    bool                  wasFloat               = false;
 
     if (NULL == tokens     ||
         NULL == descriptor ||
@@ -2811,7 +2812,12 @@ static bool parseInstructionArgument(tokens_t                *tokens,
                 return false;
             }
 
-            // TODO support absolute addresses
+            if (false == descriptor->labelsAllowed)
+            {
+                printf("%s:%u: cannot use a label as an argument for \"%s\"\n", inputFileName, lineNumber, tokens->tokens[0]);
+                return false;
+            }
+
             resolutionInstance = addNewResolutionInstance(&(requiredLabel->instances));
 
             resolutionInstance->instructionOffset = address;
@@ -2820,6 +2826,11 @@ static bool parseInstructionArgument(tokens_t                *tokens,
             // an instruction argument. The / 4 * 4 snaps us back to the base
             resolutionInstance->injectionOffset =
                     formInstructionSize[(instructionForm / 4) * 4];
+
+            if (false == descriptor->labelsRelative)
+            {
+                resolutionInstance->injectionOffset |= 0x80;
+            }
         }
     }
     else
@@ -2836,8 +2847,28 @@ static bool parseInstructionArgument(tokens_t                *tokens,
             INTERNAL_ERROR;
             return false;
         }
-        // TODO support absolute addresses
-        literalValue32 = label->address - address;
+
+        if (descriptor->labelsRelative)
+        {
+            literalValue32 = label->address - address;
+        }
+        else if (link)
+        {
+            originRelativeInstance = addNewOriginRelative(currentOriginRelatives);
+
+            if (NULL == originRelativeInstance)
+            {
+                INTERNAL_ERROR;
+                return false;
+            }
+
+            originRelativeInstance->address = address +
+                    formInstructionSize[(instructionForm / 4) * 4];
+        }
+        else
+        {
+            literalValue32 = label->address;
+        }
     }
 
     switch (instructionForm % 4)

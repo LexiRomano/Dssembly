@@ -195,6 +195,7 @@ typedef struct
     opCodeResolver_t        opCodeResolver;
     flagConditionResolver_t flagConditionResolver;
     bool                    labelsAllowed;
+    bool                    labelsRelative;
 } instructionDescriptor_t;
 
 typedef enum
