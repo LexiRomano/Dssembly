@@ -732,7 +732,7 @@ static int loadOpCodeResolver(tokens_t         *tokens,
     }
     else if (0 == strncmp("sc", instructionNameShift, 2))
     {
-        lwm = LWM_SH;
+        lwm = LWM_SC;
         instructionNameShift += 2;
     }
     else
