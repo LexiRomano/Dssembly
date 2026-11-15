@@ -233,6 +233,14 @@ static bool extractRequiredSections(dinkerConfig_t *config, char *fileName, sect
 
         if (false == isRequired)
         {
+            // Read through the rest of the header so the next pass
+            // starts reading in the right place
+            if (4 != fread(sectionNameBuffer, sizeof(uint32_t), 4, fd))
+            {
+                fclose(fd);
+                LINK_ERROR("failed to read from %s", fileName);
+                return false;
+            }
             continue;
         }
 
@@ -390,7 +398,7 @@ static bool output(dinkerConfig_t *config, sectionList_t *sections)
     {
         section = getSection(sections, config->sections[i]);
 
-        if (NULL == getSection(sections, config->sections[i]))
+        if (NULL == section)
         {
             LINK_ERROR("could not find section \"%s\"", config->sections[i]);
             fclose(out);
